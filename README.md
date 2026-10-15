@@ -106,3 +106,13 @@ Formato distinto a un respaldo: `{ "app": "cartera-clientes", "version": 1, "ref
 - Un cliente puede tener varias consultas legítimas. Crear fichas nuevas con coincidencias requiere confirmación adicional; no se bloquea automáticamente por compartir nombre o contacto.
 - El paquete es temporal hasta guardar. Cerrar la app sin confirmar puede perder la vista previa; el texto original permanece en tu conversación con ChatGPT según su servicio. No subas paquetes ni respaldos con datos personales al repositorio.
 - La carga por IA es independiente del perfil de escritura y no lo reemplaza. Los respaldos completos siguen usando su flujo habitual.
+
+
+## Versión 0.7: Ficha rápida, WhatsApp y uso offline
+- Qué sigue muestra el último mensaje recibido que hayas guardado manualmente, el próximo paso y el botón Abrir WhatsApp con mi mensaje. No lee conversaciones ni confirma envíos. El último mensaje alimenta el contexto para ChatGPT y se guarda en respaldos versión 5 (se importan también versiones anteriores).
+- WhatsApp usa un enlace wa.me con número internacional y borrador codificado. Si falta el número o el código de país, pide corregirlo; si falta el texto, abre Mensaje. El usuario revisa y pulsa Enviar en WhatsApp. No registra como enviado algo que solo se abrió.
+- La PWA incluye manifest con iconos PNG de 192 y 512 y compatibilidad maskable; Más opciones → Instalar en este dispositivo usa la oferta nativa cuando existe y ofrece instrucciones cuando no. La instalación depende del sistema y navegador.
+- El service worker precarga la versión completa de la interfaz, módulos, estilos e iconos, sin depender de fuentes ni librerías externas. Atiende solo su propio subdirectorio en GitHub Pages, no otros sitios del mismo dominio. La interfaz cacheada se sirve sin esperar a la red; una versión nueva se activa al pulsar Actualizar aplicación, evitando mezclar módulos entre versiones.
+- Espera “Lista para usar sin conexión” después de la primera visita con internet. Luego puedes abrir fichas, editarlas, preparar plantillas y respaldos sin conexión. WhatsApp para enviar, ChatGPT y Google requieren sus propios servicios y conexión. El estado de red del navegador no garantiza acceso a un servicio concreto.
+- Los datos permanecen en localStorage; instalar la PWA no es un respaldo. Guarda copias frecuentes y no borres los datos del navegador para actualizar.
+- `npm test` incluye pruebas de datos, enlaces de WhatsApp, migraciones, caché offline, alcance del service worker y manifest/iconos. Además se simularon las acciones de interfaz y eventos de instalación/actualización. La instalación nativa y la experiencia visual en un teléfono real siguen pendientes de comprobar.
