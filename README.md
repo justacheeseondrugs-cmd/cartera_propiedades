@@ -39,3 +39,17 @@ npm test
 ```
 
 Comprueba respaldos, combinación sin duplicados, fechas y plantillas. Los archivos publicables están en `docs/`. No hay dependencias externas, analítica o modelos de IA.
+
+
+## Versión 0.2: Leasing y conversaciones de Dataprop
+- Dos áreas de trabajo: Corretaje y Leasing, con filtros y ejemplos ficticios.
+- Datos de origen (Dataprop, WhatsApp, referido u otro) y correo.
+- Próxima acción y fecha de contacto. El resumen incluye fechas de hoy y anteriores, excluyendo consultas cerradas. No hay notificaciones con la app cerrada.
+- Leasing: lista de documentos editable por cliente, con estados Faltante, Recibido, En revisión, Requiere corrección y No aplica. No incluye requisitos predeterminados ni almacena archivos de identidad o antecedentes.
+- Simulación: registro manual de estado, entidad, fecha de solicitud y resultado/notas. No calcula crédito ni decide aprobación.
+- Plantillas para primer contacto desde Dataprop, conocer requisitos, consultar disponibilidad, proponer visitas y retomar el contacto; además de mensajes para documentación y simulación.
+- Tono cercano o profesional. El mensaje original pegado no se interpreta para las plantillas; se incluye solo si se genera un prompt para usar externamente en una IA. Esos prompts omiten nombre, teléfono y correo de la ficha, pero debes revisar el texto que pegues antes de compartirlo.
+- No hay integración automática con Dataprop, WhatsApp o una IA. Los mensajes no se envían desde la aplicación.
+- Los respaldos son versión 2 y conservan documentos y simulaciones. La app sigue importando respaldos versión 1 y asigna Corretaje a consultas antiguas. El almacenamiento usa la misma clave para conservar fichas existentes.
+
+Al actualizar, recarga la aplicación. Exporta un respaldo antes de cambiar de dominio o dispositivo. Las comprobaciones automatizadas cubren migración, respaldos, fechas, documentos y generación de mensajes/prompts. También se verificó el flujo de la interfaz mediante simulación DOM (crear ficha, editar documentos, filtrar, copiar y guardar); no se realizó una revisión visual en un navegador en este entorno.
