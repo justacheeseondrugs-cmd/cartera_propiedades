@@ -1,6 +1,8 @@
+import {AI_KEY,AI_MODEL,reserveCorrection,correctMessage} from './ai.js';
 import {cleanRecord,parseBackup,mergeRecords,missingFields,prepareReply,preparePrompt,prepareRevision,localDate,pendingDocuments,dueToday,DOCUMENT_STATUSES,makeCalendar,calendarTest,googleCalendarLink,cleanWritingProfile,writingProfileFromBackup,INITIAL_WRITING_PROFILE,clientPackagePrompt,parseClientPackage,clientMatches,applyClientPackage,STATUSES,INTENTS,KINDS,AREAS,SOURCES,SIMULATION_STATUSES,whatsappLink} from './core.js';
 const $=s=>document.querySelector(s),KEY='cartera-v1';
 let clients=[],selected=null,stat='today',businessArea='all',incoming=null,draftTimer,toastTimer,formDocuments=[],readOnly=false,savedPrompt=null,formContext="general",detailPanel="summary";
+let aiBusy=false,aiProposal=null;
 const contexts=new Map();let writingProfile=cleanWritingProfile(INITIAL_WRITING_PROFILE),writingExamples=[],incomingProfile=null;let packageEntries=[];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dateLabel=d=>d?new Date(d+'T12:00:00').toLocaleDateString('es-CL',{day:'numeric',month:'short',year:'numeric'}):'Sin fecha';
@@ -53,7 +55,7 @@ function simplifyDetail(c){
  const more=document.createElement('details');more.className='disclosure';more.innerHTML='<summary>Otras acciones</summary>';more.append($('#delete-client'));summary.append(more);
  const calendar=document.createElement('details');calendar.className='disclosure';calendar.innerHTML='<summary>Otras opciones de calendario</summary>';calendar.append(action.querySelector('.calendar-actions'),action.querySelector('p.small'));action.append(calendar);
  $('#followup-edit').textContent='Cambiar próximo paso';action.querySelector('[data-reminder]').textContent='Recordarme';
- const corrections=document.createElement('details');corrections.className='message-corrections';corrections.innerHTML=`<summary>Ajustar este mensaje</summary><p class="small muted">Elige los cambios que quieras combinar. Prepararemos las instrucciones para ChatGPT; después pega su respuesta en el borrador.</p><fieldset><legend>¿Qué mejoramos?</legend><div class="adjustment-options">${[['closer','Más cercano'],['formal','Más formal'],['emojis','Más emojis'],['noEmojis','Sin emojis'],['clear','Más claro'],['brief','Más breve'],['detail','Más completo']].map(([key,label])=>`<label><input type="checkbox" data-adjustment="${key}"> ${label}</label>`).join('')}</div></fieldset><label>Otro cambio (opcional)<textarea id="revision-extra" rows="2" maxlength="1000" placeholder="Por ejemplo: que termine preguntando cuándo puede visitar…"></textarea></label><button class="secondary" id="revise-message">Preparar corrección para ChatGPT</button><p class="small muted">Solo para este mensaje. Tu perfil y tu borrador se conservan.</p>`;composer.querySelector('.prompt-panel').before(corrections);
+ const corrections=document.createElement('details');corrections.className='message-corrections';corrections.innerHTML=`<summary>Ajustar este mensaje</summary><p class="small muted">Elige los cambios. OpenAI recibirá este borrador, tus ajustes, un perfil breve y datos de referencia de esta ficha. Revisa y quita datos sensibles antes de enviarlos.</p><fieldset><legend>¿Qué mejoramos?</legend><div class="adjustment-options">${[['closer','Más cercano'],['formal','Más formal'],['emojis','Más emojis'],['noEmojis','Sin emojis'],['clear','Más claro'],['brief','Más breve'],['detail','Más completo']].map(([key,label])=>`<label><input type="checkbox" data-adjustment="${key}"> ${label}</label>`).join('')}</div></fieldset><label>Otro cambio (opcional)<textarea id="revision-extra" rows="2" maxlength="1000" placeholder="Por ejemplo: que termine preguntando cuándo puede visitar…"></textarea></label><button class="primary" id="correct-in-app">Corregir aquí con IA</button> <button class="quiet" id="revise-message">Usar ChatGPT manualmente</button><p class="small" id="ai-progress" role="status"></p><p class="small muted">Solo para este mensaje. Tu perfil y tu borrador se conservan.</p>`;composer.querySelector('.prompt-panel').before(corrections);
  const prompt=composer.querySelector('.prompt-panel');prompt.querySelector('summary').textContent='Escribir con ChatGPT';prompt.querySelector('p').textContent='Prepara las instrucciones, revisa qué compartirás y cópialas en ChatGPT. Después pega su respuesta en el borrador de Cartera. No se envía nada automáticamente.';$('#generate-prompt').textContent='Preparar para ChatGPT';prompt.insertBefore($('#original').closest('label'),prompt.querySelector('button'));
  const tone=document.createElement('details');tone.className='disclosure';tone.innerHTML='<summary>Cambiar el tono del mensaje</summary>';tone.append($('#tone').closest('label'));const selector=$('#template').closest('label');selector.firstChild.textContent='¿Qué quieres decirle?';composer.querySelector('.two').replaceWith(selector,tone);
  composer.querySelector('h3').textContent='Prepara su mensaje';composer.querySelector('.muted').textContent='1. Elige qué necesitas decir. 2. Revisa el texto. 3. Cópialo a WhatsApp.';
@@ -143,6 +145,15 @@ document.addEventListener('click',e=>{
  if(b.id==='generate'){const c=current();if(!c||readOnly)return;if($('#reply').value.trim()&&!confirm('¿Reemplazar el borrador actual por la plantilla?'))return;$('#reply').value=prepareReply(c,$('#original').value,$('#template').value,$('#tone').value,writingProfile);flushDraft();}
  if(b.id==='copy'){flushDraft();copyField('reply');}
  if(b.id==='generate-prompt'){const c=current();if(c)$('#prompt').value=preparePrompt(c,$('#original').value,$('#template').value,$('#tone').value,writingProfile);}
+ if(b.id==='correct-in-app'){runCorrection();return;}
+ if(b.id==='ai-settings'){openAISettings();return;}
+ if(b.id==='ai-forget'){try{localStorage.removeItem(AI_KEY);$('#ai-key').value='';$('#ai-key-state').textContent='Sin clave guardada.';toast('Clave eliminada de este navegador.');}catch{toast('No se pudo eliminar la clave.');}return;}
+ if(b.id==='ai-accept'){
+  const p=aiProposal,c=current();if(!p||!c||c.id!==p.clientId||$('#reply')?.value!==p.original||c.draft!==p.original){toast('El borrador o el cliente cambió. Conserva la propuesta copiándola antes de cerrar.');return;}
+  const next=clients.map(r=>r.id===p.clientId?{...r,draft:$('#ai-proposal').value,updatedAt:new Date().toISOString()}:r);
+  if(!commit(next))return;$('#reply').value=$('#ai-proposal').value;$('#draft-state').textContent='Borrador corregido y guardado en este dispositivo';$('#ai-review-dialog').close();aiProposal=null;toast('Propuesta guardada. Revísala antes de enviar.');return;
+ }
+ if(b.id==='ai-discard'){aiProposal=null;$('#ai-review-dialog').close();return;}
  if(b.id==='revise-message'){const c=current();if(!c)return;try{const prompt=prepareRevision(c,$('#reply').value,[...document.querySelectorAll('[data-adjustment]:checked')].map(el=>el.dataset.adjustment),$('#revision-extra').value,writingProfile);if(!flushDraft())return;$('#prompt').value=prompt;$('#prompt').closest('details').open=true;$('#prompt').focus();toast('Corrección preparada. Copia las instrucciones en ChatGPT y pega su respuesta en el borrador.');}catch(err){toast(err.message);}return;}
  if(b.id==='copy-prompt')copyField('prompt');
  if(b.id==='delete-client'){const c=current();if(!readOnly&&c&&confirm('¿Eliminar la consulta de '+c.name+'? Solo podrás recuperarla desde un respaldo previo.')){clearTimeout(draftTimer);if(commit(clients.filter(r=>r.id!==c.id))){contexts.delete(c.id);selected=null;render();toast('Consulta eliminada.');}}}
@@ -227,3 +238,29 @@ $('#package-review-form').onsubmit=e=>{
 window.addEventListener('pagehide',flushDraft);document.addEventListener('visibilitychange',()=>{if(document.hidden)flushDraft();});
 window.addEventListener('storage',e=>{if(e.key===KEY){readOnly=true;toast('Los datos cambiaron en otra pestaña. Recarga antes de seguir editando.');document.querySelectorAll('button,input,textarea,select').forEach(el=>el.disabled=true);}});
 render();
+
+function openAISettings(){
+ $('#ai-key').value='';try{$('#ai-key-state').textContent=localStorage.getItem(AI_KEY)?'Ya hay una clave guardada. Déjalo vacío para conservarla.':'Todavía no hay una clave guardada.';}catch{$('#ai-key-state').textContent='El almacenamiento no está disponible.';}
+ $('#ai-settings-dialog').showModal();
+}
+$('#ai-settings-form').onsubmit=e=>{e.preventDefault();const key=$('#ai-key').value.trim();try{if(key){if(!key.startsWith('sk-')||key.length<20)throw new Error('Revisa la clave de la plataforma API de OpenAI.');localStorage.setItem(AI_KEY,key);}else if(!localStorage.getItem(AI_KEY))throw new Error('Introduce tu clave de OpenAI.');$('#ai-key').value='';$('#ai-settings-dialog').close();toast('IA configurada. Vuelve al mensaje y pulsa Corregir aquí con IA.');}catch(err){toast(err.message);}};
+async function runCorrection(){
+ if(aiBusy||readOnly)return;const c=current();if(!c)return;
+ let key,prompt,original,attempt;
+ try{
+  key=localStorage.getItem(AI_KEY);if(!key){openAISettings();return;}
+  if(navigator.onLine===false)throw new Error('Necesitas conexión para corregir con OpenAI. Puedes editar a mano sin internet.');
+  original=$('#reply').value;if(original.length>4000)throw new Error('Para esta corrección, acorta el borrador a 4.000 caracteres como máximo.');
+  const profile={...writingProfile,preferences:writingProfile.preferences.slice(0,800),examples:[]};
+  const reference={...c,lastMessage:'',notes:'',phone:'',email:'',name:'',documents:c.documents.slice(0,10)};
+  prompt=prepareRevision(reference,original,[...document.querySelectorAll('[data-adjustment]:checked')].map(el=>el.dataset.adjustment),$('#revision-extra').value,profile);
+  if(prompt.length>14000)throw new Error('Acorta el borrador o las indicaciones para corregirlo.');
+  if(!flushDraft())return;attempt=reserveCorrection(localStorage,localDate());
+ }catch(err){toast(err.message);return;}
+ aiBusy=true;const button=$('#correct-in-app'),progress=$('#ai-progress');button.disabled=true;progress.textContent=`Corrigiendo… Intento ${attempt} de 20 hoy. Una petición, sin reintentos automáticos.`;
+ try{
+  const text=await correctMessage({key,prompt});aiProposal={clientId:c.id,original};
+  $('#ai-original').textContent=original;$('#ai-proposal').value=text;$('#ai-review-dialog').showModal();
+ }catch(err){toast(err.message);}
+ finally{aiBusy=false;button.disabled=false;progress.textContent='';}
+}
