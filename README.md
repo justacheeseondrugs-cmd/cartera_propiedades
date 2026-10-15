@@ -78,3 +78,15 @@ Al actualizar, recarga la aplicación. Exporta un respaldo antes de cambiar de d
 - Botones más grandes, texto más legible y acciones nombradas directamente. La pestaña Mensaje explica cómo preparar, revisar y copiar un texto para WhatsApp.
 - Las fichas, respaldos y recordatorios existentes se conservan. La estructura de datos sigue en versión 3.
 - Se verificaron lógica, migración, calendarios y los recorridos de interfaz mediante simulación DOM, incluyendo navegación entre secciones y apertura del grupo que contenga un campo inválido. Falta una revisión visual en un teléfono real.
+
+
+## Versión 0.5: Mi forma de escribir y contexto para ChatGPT
+- En Más opciones → Mi forma de escribir, guarda trato, tono, extensión, emojis, saludos, firma, preferencias y hasta cinco mensajes de ejemplo de 1.200 caracteres. Las opciones iniciales son editables: no se han deducido de conversaciones privadas.
+- La app no puede leer WhatsApp ni el historial de ChatGPT. Pega solo ejemplos seleccionados y anonimizados; no exportes chats completos.
+- Dentro de Mensaje → Escribir con ChatGPT, prepara las instrucciones con el perfil y solo el caso seleccionado. Revisa el texto, copia las instrucciones, abre ChatGPT y pégalas. El borrador de respuesta se trae manualmente a Cartera.
+- El generador omite nombre, teléfono y correo de la ficha. El texto pegado, preferencias y ejemplos son libres: debes quitarles datos personales o sensibles antes de copiarlos. No hay una anonimización automática ni envío a una API. Abrir ChatGPT solo abre su página, sin datos de la ficha en la dirección.
+- El perfil se aplica al prompt para la IA; las plantillas de reglas existentes siguen funcionando sin IA. El perfil no entrena un modelo ni crea memoria permanente en ChatGPT. Se incluye en cada prompt preparado.
+- Los respaldos versión 4 incluyen el estilo. Al importar un respaldo, recuperar también el estilo es opcional y requiere marcar una casilla; si no la marcas, conserva el estilo actual. Las versiones 1, 2 y 3 siguen siendo compatibles.
+
+- Perfil inicial suministrado por la usuaria: trato de usted, tono cercano y profesional, respeto por los tiempos y sin promesas no confirmadas. Incluye cinco muestras marcadas como iniciales por revisar. La usuaria puede sustituirlas y marcar cuándo estén aprobadas.
+- El perfil inicial solo se aplica si el navegador no tiene uno guardado; nunca reemplaza silenciosamente preferencias existentes. No contiene nombre real de la asesora, empresa ni datos de clientes.
