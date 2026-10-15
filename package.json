@@ -1,1 +1,1 @@
-{"name":"cartera","version":"0.8.0","private":true,"type":"module","scripts":{"start":"node server.mjs","test":"node --test test/core.test.mjs test/offline.test.mjs test/ai.test.mjs"},"engines":{"node":">=22"}}
+{"name":"cartera","version":"0.9.0","private":true,"type":"module","scripts":{"start":"node server.mjs","test":"node --test test/core.test.mjs test/offline.test.mjs test/ai.test.mjs"},"engines":{"node":">=22"}}

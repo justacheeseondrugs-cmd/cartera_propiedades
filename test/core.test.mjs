@@ -60,3 +60,14 @@ test('revision requires a draft and an actionable adjustment',()=>{
  assert.throws(()=>prepareRevision(client(),'Hola',[]),/Elige un cambio/);
  assert.match(prepareRevision(client(),'Hola',[],'Que sea amable'),/Que sea amable/);
 });
+
+import {sessionFromBackup} from '../docs/core.js';
+test('session package round trip preserves explicit workspace fields and drops arbitrary credentials',()=>{
+ const c=client();const raw=JSON.stringify({app:'cartera',version:6,clients:[c],apiKey:'not-exported',session:{selected:c.id,panel:'message',apiKey:'not-exported',composers:[{id:c.id,original:'Consulta',style:'reply',tone:'formal',prompt:'Instrucciones',extra:'Más cálido',adjustments:['emojis','invalid'],apiKey:'not-exported'}],proposal:{clientId:c.id,original:c.draft,text:'Propuesta editable'}}});
+ assert.deepEqual(parseBackup(raw),[c]);const session=sessionFromBackup(raw);assert.equal(session.selected,c.id);assert.equal(session.composers[0].prompt,'Instrucciones');assert.deepEqual(session.composers[0].adjustments,['emojis']);assert.equal(session.proposal.text,'Propuesta editable');assert.doesNotMatch(JSON.stringify(session),/not-exported/);
+});
+test('legacy backups still load and invalid sessions never introduce missing clients',()=>{
+ const c=client();assert.equal(sessionFromBackup(JSON.stringify({app:'cartera',version:5,clients:[c]})),null);
+ const session=sessionFromBackup(JSON.stringify({app:'cartera',version:6,clients:[c],session:{selected:'unknown',panel:'bad',composers:[{id:'unknown'}],proposal:{clientId:'unknown',original:'x',text:'y'}}}));assert.equal(session.selected,null);assert.equal(session.panel,'summary');assert.deepEqual(session.composers,[]);assert.equal(session.proposal,null);
+ assert.throws(()=>sessionFromBackup(JSON.stringify({app:'cartera',version:6,clients:[c],session:{composers:'bad'}})),/Sesión/);
+});

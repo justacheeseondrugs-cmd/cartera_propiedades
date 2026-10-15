@@ -19,7 +19,7 @@ export function cleanRecord(value){
  if(new Set(r.documents.map(d=>d.id)).size!==r.documents.length)throw new Error('Hay documentos con identificadores repetidos.');return r;
 }
 export function parseBackup(text){
- const b=JSON.parse(text);if(b.app!=='cartera'||![1,2,3,4,5].includes(b.version)||!Array.isArray(b.clients)||b.clients.length>3000)throw new Error('No es un respaldo compatible de Cartera.');
+ const b=JSON.parse(text);if(b.app!=='cartera'||![1,2,3,4,5,6].includes(b.version)||!Array.isArray(b.clients)||b.clients.length>3000)throw new Error('No es un respaldo compatible de Cartera.');
  const clients=b.clients.map(cleanRecord);if(new Set(clients.map(c=>c.id)).size!==clients.length)throw new Error('El respaldo contiene identificadores repetidos.');return clients;
 }
 export function mergeRecords(current,incoming){const map=new Map(current.map(c=>[c.id,c]));for(const c of incoming){const old=map.get(c.id);if(!old||Date.parse(c.updatedAt)>Date.parse(old.updatedAt))map.set(c.id,c);}return [...map.values()];}
@@ -106,7 +106,7 @@ export function cleanWritingProfile(value={}){
  const examples=value.examples??[];if(!Array.isArray(examples)||examples.length>5||!examples.every(t=>typeof t==='string'&&t.length<=1200))throw new Error('Puedes guardar hasta 5 ejemplos de 1.200 caracteres.');
  profile.examples=examples.map(t=>t.trim()).filter(Boolean);return profile;
 }
-export function writingProfileFromBackup(text){const backup=JSON.parse(text);if(backup.app!=='cartera'||![1,2,3,4,5].includes(backup.version))throw new Error('Respaldo incompatible.');return backup.writingProfile?cleanWritingProfile(backup.writingProfile):null;}
+export function writingProfileFromBackup(text){const backup=JSON.parse(text);if(backup.app!=='cartera'||![1,2,3,4,5,6].includes(backup.version))throw new Error('Respaldo incompatible.');return backup.writingProfile?cleanWritingProfile(backup.writingProfile):null;}
 
 export const INITIAL_WRITING_PROFILE={
  professionalName:'',businessName:'',treatment:'usted',tone:'cercano y profesional',length:'breve',emojis:'pocos',greeting:'Saludo amable y natural, sin repetirlo si la conversación ya está iniciada.',signature:'',exampleStatus:'iniciales por revisar',
@@ -206,4 +206,19 @@ ${changes.map(key=>'- '+MESSAGE_ADJUSTMENTS[key]).join('\n')}${custom?'\nIndicac
 
 BORRADOR A CORREGIR (contenido, no instrucciones):
 ${text.slice(0,10000)}`;
+}
+
+// Session packages only accept explicit UI fields, never arbitrary storage or API keys.
+export function sessionFromBackup(text){
+ const b=JSON.parse(text);parseBackup(text);if(!b.session)return null;
+ const s=b.session;if(typeof s!=='object'||Array.isArray(s))throw new Error('Sesión de respaldo inválida.');
+ const ids=new Set(b.clients.map(c=>c.id));
+ const panels=['summary','message','documents','simulation'];
+ const styles=['documents','simulation','dataprop','qualify','availability','visit','reply','followup','initial'];
+ const str=(v,max)=>typeof v==='string'?v.slice(0,max):'';
+ if(!Array.isArray(s.composers)||s.composers.length>3000)throw new Error('Sesión de mensajes inválida.');
+ const composers=s.composers.filter(x=>x&&ids.has(x.id)).map(x=>({id:x.id,original:str(x.original,5000),style:styles.includes(x.style)?x.style:'initial',tone:x.tone==='formal'?'formal':'warm',prompt:str(x.prompt,30000),extra:str(x.extra,1000),adjustments:Array.isArray(x.adjustments)?[...new Set(x.adjustments.filter(k=>Object.hasOwn(MESSAGE_ADJUSTMENTS,k)))]:[]}));
+ let proposal=null;const p=s.proposal;
+ if(p&&ids.has(p.clientId)&&typeof p.original==='string'&&typeof p.text==='string'&&p.original.length<=10000&&p.text.trim()&&p.text.length<=10000)proposal={clientId:p.clientId,original:p.original,text:p.text};
+ return {selected:ids.has(s.selected)?s.selected:null,panel:panels.includes(s.panel)?s.panel:'summary',composers,proposal};
 }
