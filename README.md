@@ -90,3 +90,19 @@ Al actualizar, recarga la aplicación. Exporta un respaldo antes de cambiar de d
 
 - Perfil inicial suministrado por la usuaria: trato de usted, tono cercano y profesional, respeto por los tiempos y sin promesas no confirmadas. Incluye cinco muestras marcadas como iniciales por revisar. La usuaria puede sustituirlas y marcar cuándo estén aprobadas.
 - El perfil inicial solo se aplica si el navegador no tiene uno guardado; nunca reemplaza silenciosamente preferencias existentes. No contiene nombre real de la asesora, empresa ni datos de clientes.
+
+
+## Versión 0.6: Cargar clientes preparados con ChatGPT
+1. Abre Cargar varios con ChatGPT (también en Más opciones).
+2. Copia las instrucciones y pega debajo tus notas desordenadas en ChatGPT. Usa alias y evita antecedentes sensibles. No hay envío automático ni API key.
+3. Pega el JSON devuelto o carga su archivo, y pulsa Revisar antes de guardar.
+4. Corrige las fichas. Las coincidencias por teléfono, correo o nombre requieren elegir explícitamente crear, actualizar u omitir. La app no fusiona identidades por sí sola.
+5. Guarda las fichas revisadas. No se crean eventos de calendario ni se envían mensajes al importar.
+
+Formato distinto a un respaldo: `{ "app": "cartera-clientes", "version": 1, "referenceDate": "YYYY-MM-DD", "clients": [...] }`. Las instrucciones incluyen el esquema completo y opciones permitidas. Hasta 50 entradas y 2 MB. No admite IDs ni marcas de tiempo de la IA; se generan localmente.
+
+- La revisión valida tipos, fechas y estados, pero no puede comprobar que los hechos extraídos por ChatGPT sean verdaderos. Los datos dudosos se conservan como notas Por confirmar. Fechas relativas deben confirmarse.
+- Actualizar conserva campos no aportados o vacíos, borradores y documentos no mencionados. Añade notas y combina documentos por nombre; un documento existente puede cambiar de estado. La vista previa muestra los campos de la ficha que cambiarán. Dos entradas no pueden actualizar simultáneamente la misma ficha.
+- Un cliente puede tener varias consultas legítimas. Crear fichas nuevas con coincidencias requiere confirmación adicional; no se bloquea automáticamente por compartir nombre o contacto.
+- El paquete es temporal hasta guardar. Cerrar la app sin confirmar puede perder la vista previa; el texto original permanece en tu conversación con ChatGPT según su servicio. No subas paquetes ni respaldos con datos personales al repositorio.
+- La carga por IA es independiente del perfil de escritura y no lo reemplaza. Los respaldos completos siguen usando su flujo habitual.
