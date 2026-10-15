@@ -62,3 +62,10 @@ Al actualizar, recarga la aplicación. Exporta un respaldo antes de cambiar de d
 - “Abrir Google Calendar” abre un borrador; selecciona la cuenta y el calendario correctos, configura el aviso y guarda. No hay API, credenciales o conexión permanente.
 - Ninguna exportación se sincroniza. Completar, editar o borrar en Cartera no cambia los eventos existentes; importar varias veces puede duplicarlos según la app. Los recordatorios externos los gestiona el calendario y sus permisos de notificación.
 - Respaldos versión 3: conservan hora y finalización y siguen importando versiones 1 y 2.
+
+
+## Versión 0.3.1: Accesos a recordatorios en contexto
+- Botón para recordar un documento individual, todos los documentos, una simulación o volver a contactar después de preparar una respuesta.
+- Después de guardar una consulta o editar documentos/estado, aparece una oferta opcional para programar el próximo paso. Guardar nunca genera eventos por sí solo.
+- Un diálogo permite revisar acción, fecha y hora y elegir guardar solo en Cartera, descargar .ics o abrir un borrador de Google Calendar.
+- Cada ficha sigue teniendo **un próximo seguimiento**. Programar desde otra sección lo actualiza; los eventos ya exportados son independientes y deben ajustarse manualmente. La app no adjunta ni guarda archivos de documentos.
