@@ -34,3 +34,5 @@ test('v4 backups preserve profile and legacy backups do not replace it',()=>{con
 
 import {INITIAL_WRITING_PROFILE} from '../docs/core.js';
 test('initial supplied profile keeps usted and labels its five samples as unapproved',()=>{const p=cleanWritingProfile(INITIAL_WRITING_PROFILE);assert.equal(p.treatment,'usted');assert.equal(p.exampleStatus,'iniciales por revisar');assert.equal(p.examples.length,5);assert.match(p.preferences,/No prometa aprobación/);assert.equal(p.professionalName,'');assert.match(preparePrompt(leasing(),'','documents','warm',p),/no mensajes verificados/);});
+
+test('Dataprop template inserts stored sender identity with independent missing-field fallbacks',()=>{const full=prepareReply(client(),'','dataprop','warm',{professionalName:'María Prueba',businessName:'Propiedades Ejemplo'});assert.match(full,/Soy María Prueba, de Propiedades Ejemplo\./);assert.doesNotMatch(full,/\[tu nombre\]|\[corretaje\]/);assert.match(prepareReply(client(),'','dataprop','warm',{professionalName:'María Prueba'}),/Soy María Prueba, de \[corretaje\]/);assert.match(prepareReply(client(),'','dataprop'),/Soy \[tu nombre\], de \[corretaje\]/);});

@@ -125,7 +125,7 @@ document.addEventListener('click',e=>{
  if(b.id==='empty-new')openForm();
  if(['edit-client','followup-edit','followup-edit-bottom','edit-documents','edit-simulation'].includes(b.id))openForm(current(),b.id==='edit-documents'?'documents':b.id==='edit-simulation'?'simulationStatus':b.id.startsWith('followup')?'nextAction':'name');
  if(b.id==='back-list'){if(!flushDraft())return;selected=null;render();}
- if(b.id==='generate'){const c=current();if(!c||readOnly)return;if($('#reply').value.trim()&&!confirm('¿Reemplazar el borrador actual por la plantilla?'))return;$('#reply').value=prepareReply(c,$('#original').value,$('#template').value,$('#tone').value);flushDraft();}
+ if(b.id==='generate'){const c=current();if(!c||readOnly)return;if($('#reply').value.trim()&&!confirm('¿Reemplazar el borrador actual por la plantilla?'))return;$('#reply').value=prepareReply(c,$('#original').value,$('#template').value,$('#tone').value,writingProfile);flushDraft();}
  if(b.id==='copy'){flushDraft();copyField('reply');}
  if(b.id==='generate-prompt'){const c=current();if(c)$('#prompt').value=preparePrompt(c,$('#original').value,$('#template').value,$('#tone').value,writingProfile);}
  if(b.id==='copy-prompt')copyField('prompt');

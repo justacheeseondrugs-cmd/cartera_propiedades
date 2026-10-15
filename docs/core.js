@@ -25,7 +25,8 @@ export function mergeRecords(current,incoming){const map=new Map(current.map(c=>
 export function missingFields(c){return [['area','comuna'],['kind','tipo de propiedad'],['budget',c.intent==='Ofrecer propiedad'?'precio esperado':'presupuesto']].filter(([key])=>!c[key].trim()).map(([,label])=>label);}
 export function pendingDocuments(c){return (c.documents??[]).filter(d=>['Faltante','Requiere corrección'].includes(d.status));}
 export function dueToday(c,today=localDate()){return Boolean(c.status!=='Cerrado'&&!c.followupDoneAt&&c.followup&&c.followup<=today);}
-export function prepareReply(c,message='',style='initial',tone='warm'){
+export function prepareReply(c,message='',style='initial',tone='warm',profile={}){
+ const sender=cleanWritingProfile(profile);
  const name=c.name.trim().split(/\s+/)[0];const greeting=tone==='formal'?`Hola, ${name}. Espero que estés bien.`:`¡Hola, ${name}! 😊`;
  const property=c.property?`la propiedad ${c.property}`:'una propiedad';
  if(style==='documents'){
@@ -38,7 +39,7 @@ export function prepareReply(c,message='',style='initial',tone='warm'){
   const states={'Sin solicitar':`Quisiera coordinar el próximo paso para solicitar tu simulación de crédito${entity}. ¿Podemos revisar los antecedentes que tienes disponibles?`,'Solicitada':`Dejé registrada la solicitud de tu simulación de crédito${entity}. ¿Has recibido alguna comunicación o te han pedido antecedentes adicionales?`,'En curso':`Estoy dando seguimiento a tu simulación de crédito${entity}, que figura en curso. ¿Tienes alguna novedad o duda que debamos revisar?`,'Esperando respuesta':`Estoy dando seguimiento a tu simulación de crédito${entity}; en nuestra ficha aún figura pendiente de respuesta. ¿Has recibido alguna novedad por otro canal?`,'Recibida':`Ya tengo registrada una respuesta de tu simulación de crédito${entity}. ¿Qué horario te acomoda para revisar juntos sus condiciones y el próximo paso?`,'Cerrada':`Quisiera saber si necesitas retomar tu consulta de financiamiento o resolver alguna duda sobre los próximos pasos. ¿Cómo te gustaría continuar?`};
   return `${greeting}\n\n${states[c.simulationStatus]}\n\nLa simulación es referencial y no equivale a una aprobación de financiamiento.`;
  }
- if(style==='dataprop')return `${greeting}\n\nSoy [tu nombre], de [corretaje]. Vi tu interés registrado en Dataprop por ${property}${c.area?' en '+c.area:''}. ¿Sigues buscando ${c.intent==='Arrendar'?'arrendar':c.intent==='Comprar'?'comprar':'información sobre esa propiedad'}? Cuéntame qué te gustaría saber primero para poder orientarte.`;
+ if(style==='dataprop')return `${greeting}\n\nSoy ${sender.professionalName||'[tu nombre]'}, de ${sender.businessName||'[corretaje]'}. Vi tu interés registrado en Dataprop por ${property}${c.area?' en '+c.area:''}. ¿Sigues buscando ${c.intent==='Arrendar'?'arrendar':c.intent==='Comprar'?'comprar':'información sobre esa propiedad'}? Cuéntame qué te gustaría saber primero para poder orientarte.`;
  if(style==='qualify'&&c.intent==='Por definir')return `${greeting}\n\n¿Buscas comprar, arrendar o quieres ofrecer una propiedad? Así puedo hacerte las preguntas que correspondan.`;
  if(style==='qualify'){
   const missing=missingFields(c),questions=[];
