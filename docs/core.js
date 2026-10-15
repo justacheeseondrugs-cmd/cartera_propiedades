@@ -1,5 +1,5 @@
 export const STATUSES=['Nuevo','En seguimiento','Esperando datos','Visita','Papeles en curso','Faltantes','Esperando respuesta','Cerrado'];
-export const INTENTS=['Comprar','Arrendar','Ofrecer propiedad'];
+export const INTENTS=['Por definir','Comprar','Arrendar','Ofrecer propiedad'];
 export const KINDS=['','Departamento','Casa','Terreno','Local / oficina','Otro'];
 export const AREAS=['Corretaje','Leasing'];
 export const SOURCES=['WhatsApp','Dataprop','Referido','Otro'];
@@ -39,6 +39,7 @@ export function prepareReply(c,message='',style='initial',tone='warm'){
   return `${greeting}\n\n${states[c.simulationStatus]}\n\nLa simulación es referencial y no equivale a una aprobación de financiamiento.`;
  }
  if(style==='dataprop')return `${greeting}\n\nSoy [tu nombre], de [corretaje]. Vi tu interés registrado en Dataprop por ${property}${c.area?' en '+c.area:''}. ¿Sigues buscando ${c.intent==='Arrendar'?'arrendar':c.intent==='Comprar'?'comprar':'información sobre esa propiedad'}? Cuéntame qué te gustaría saber primero para poder orientarte.`;
+ if(style==='qualify'&&c.intent==='Por definir')return `${greeting}\n\n¿Buscas comprar, arrendar o quieres ofrecer una propiedad? Así puedo hacerte las preguntas que correspondan.`;
  if(style==='qualify'){
   const missing=missingFields(c),questions=[];
   if(missing.includes('comuna'))questions.push('¿En qué comuna o sector buscas?');
@@ -52,6 +53,7 @@ export function prepareReply(c,message='',style='initial',tone='warm'){
  if(style==='reply')return `${greeting}\n\nGracias por contarme. Voy a revisar lo que me comentas${c.property?' sobre '+c.property:''} para darte información confirmada. ¿Hay algún requisito importante para ti que aún no hayamos conversado?`;
  if(style==='followup')return `${greeting}\n\nQuería retomar nuestra conversación${c.property?' sobre '+c.property:c.area?' sobre tu búsqueda en '+c.area:''}. ¿Sigues interesado/a o cambió lo que necesitas? Si prefieres que no te contacte nuevamente, dímelo y lo dejo registrado.`;
  if(c.intent==='Ofrecer propiedad')return `${greeting}\n\n¿Quieres vender o poner en arriendo tu propiedad? Para orientarte, cuéntame su comuna, tipo de propiedad, características principales y precio esperado. No hace falta enviar documentos personales por ahora.`;
+ if(c.intent==='Por definir')return `${greeting}\n\nPara orientarte, ¿buscas comprar, arrendar o tienes una propiedad que quieres ofrecer?`;
  const missing=missingFields(c);let questions=[];if(missing.includes('comuna'))questions.push('¿En qué comuna o sector buscas?');if(missing.includes('tipo de propiedad'))questions.push('¿Qué tipo de propiedad necesitas?');if(missing.includes('presupuesto'))questions.push('¿Cuál es tu presupuesto aproximado'+(c.intent==='Arrendar'?' mensual':'')+'?');questions.push('¿Para cuándo la necesitas?');
  return `${greeting}\n\nPara ayudarte a ${c.intent==='Comprar'?'comprar':'arrendar'}${c.area?' en '+c.area:''}, ${c.budget?'tomo como referencia tu presupuesto de '+c.budget+'. ':''}te consulto:\n${questions.join('\n')}\n\nCon esos datos podré revisar opciones. Su disponibilidad y precio deben confirmarse.`;
 }

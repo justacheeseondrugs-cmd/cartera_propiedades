@@ -69,3 +69,12 @@ Al actualizar, recarga la aplicación. Exporta un respaldo antes de cambiar de d
 - Después de guardar una consulta o editar documentos/estado, aparece una oferta opcional para programar el próximo paso. Guardar nunca genera eventos por sí solo.
 - Un diálogo permite revisar acción, fecha y hora y elegir guardar solo en Cartera, descargar .ics o abrir un borrador de Google Calendar.
 - Cada ficha sigue teniendo **un próximo seguimiento**. Programar desde otra sección lo actualiza; los eventos ya exportados son independientes y deben ajustarse manualmente. La app no adjunta ni guarda archivos de documentos.
+
+
+## Versión 0.4: Vista más sencilla
+- Inicio en Mis pendientes y acceso a Todos mis clientes. Filtros y estadísticas avanzadas se despliegan solo cuando se necesitan.
+- Ficha por secciones: Qué sigue, Mensaje, Documentos y Simulación. Solo se muestra una sección a la vez. Las opciones de IA y calendario menos frecuentes siguen disponibles en bloques desplegables.
+- Añadir cliente requiere solo el nombre; los datos de propiedad, correo, origen, seguimiento, documentos y notas están agrupados. La intención empieza en Por definir, sin asumir compra o arriendo.
+- Botones más grandes, texto más legible y acciones nombradas directamente. La pestaña Mensaje explica cómo preparar, revisar y copiar un texto para WhatsApp.
+- Las fichas, respaldos y recordatorios existentes se conservan. La estructura de datos sigue en versión 3.
+- Se verificaron lógica, migración, calendarios y los recorridos de interfaz mediante simulación DOM, incluyendo navegación entre secciones y apertura del grupo que contenga un campo inválido. Falta una revisión visual en un teléfono real.
