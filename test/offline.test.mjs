@@ -4,9 +4,10 @@ import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 const root=new URL('../docs/',import.meta.url),scope='https://example.org/cartera_propiedades/';
 async function worker(){
+ const cacheName=(await readFile(new URL('sw.js',root),'utf8')).match(/const CACHE='([^']+)'/)[1];
  const listeners={},stores=new Map();let networkCalls=0,skipped=false,claimed=false;
  function key(input){const url=new URL(typeof input==='string'?input:input.url,scope);url.search='';return url.href;}
- const cache={addAll:async requests=>{for(const req of requests){assert.equal(req.cache,'reload');const file=new URL(req.url).pathname.replace('/cartera_propiedades/','')||'index.html';stores.get('cartera-shell-v9').set(key(req),new Response(await readFile(new URL(file,root))));}},match:async input=>stores.get('cartera-shell-v9').get(key(input))?.clone()};
+ const cache={addAll:async requests=>{for(const req of requests){assert.equal(req.cache,'reload');const file=new URL(req.url).pathname.replace('/cartera_propiedades/','')||'index.html';stores.get(cacheName).set(key(req),new Response(await readFile(new URL(file,root))));}},match:async input=>stores.get(cacheName).get(key(input))?.clone()};
  const caches={open:async name=>{if(!stores.has(name))stores.set(name,new Map());return cache;},keys:async()=>[...stores.keys()],delete:async name=>stores.delete(name)};
  const self={registration:{scope},addEventListener:(name,fn)=>{listeners[name]=fn;},skipWaiting:()=>{skipped=true;},clients:{claim:()=>{claimed=true;}}};
  vm.runInNewContext(await readFile(new URL('sw.js',root),'utf8'),{self,caches,Request,Response,URL,AbortController,setTimeout,clearTimeout,fetch:async()=>{networkCalls++;throw new Error('offline');}});

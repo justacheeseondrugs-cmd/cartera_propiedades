@@ -48,3 +48,15 @@ test('creating and skipping require decisions and never reuse AI preview IDs',()
 import {whatsappLink} from '../docs/core.js';
 test('WhatsApp deep link uses an international number and encodes draft text literally',()=>{const url=new URL(whatsappLink('+56 9 1234 5678','Hola, ¿cómo está? & #seguimiento 🌿'));assert.equal(url.origin,'https://wa.me');assert.equal(url.pathname,'/56912345678');assert.equal(url.searchParams.get('text'),'Hola, ¿cómo está? & #seguimiento 🌿');assert.equal(new URL(whatsappLink('0056912345678','Hola')).pathname,'/56912345678');assert.throws(()=>whatsappLink('912345678','Hola'));assert.throws(()=>whatsappLink('+56 llamada 912345678','Hola'));assert.throws(()=>whatsappLink('+56912345678',''));});
 test('last received message survives full backup and reviewed AI-package import',()=>{const c=cleanRecord({...client(),lastMessage:'¿Podemos visitar mañana?',lastMessageAt:'2026-10-15T14:00:00Z'});const text=JSON.stringify({app:'cartera',version:5,clients:[c],writingProfile:cleanWritingProfile()});assert.equal(parseBackup(text)[0].lastMessage,c.lastMessage);assert.ok(writingProfileFromBackup(text));const [entry]=parseClientPackage(pack([{name:c.name,lastMessage:'Prefiero el sábado'}]));const [updated]=applyClientPackage([c],[{entry,choice:c.id}],()=> 'generated-1','2026-10-15T15:00:00Z');assert.equal(updated.lastMessage,'Prefiero el sábado');assert.equal(updated.lastMessageAt,'2026-10-15T15:00:00Z');});
+
+import {prepareRevision} from '../docs/core.js';
+test('revision uses current draft, chosen feedback and profile without mutating them',()=>{
+ const c={...client(),lastMessage:'¿Podemos coordinar una visita?'};const profile={professionalName:'Asesora de prueba',businessName:'Oficina de prueba'};const before=JSON.stringify({c,profile});
+ const prompt=prepareRevision(c,'Gracias por su interés.',['closer','emojis','clear','unknown','closer'],'Termina con una pregunta.',profile);
+ assert.match(prompt,/Gracias por su interés/);assert.match(prompt,/Más cercano/);assert.match(prompt,/emojis apropiados/);assert.match(prompt,/menos enredado/);assert.match(prompt,/Termina con una pregunta/);assert.match(prompt,/Oficina de prueba/);assert.match(prompt,/coordinar una visita/);assert.match(prompt,/No inventes datos/);assert.match(prompt,/no cambian el perfil/);assert.doesNotMatch(prompt,/unknown/);assert.equal(JSON.stringify({c,profile}),before);
+});
+test('revision requires a draft and an actionable adjustment',()=>{
+ assert.throws(()=>prepareRevision(client(),' ',['clear']),/antes de corregirlo/);
+ assert.throws(()=>prepareRevision(client(),'Hola',[]),/Elige un cambio/);
+ assert.match(prepareRevision(client(),'Hola',[],'Que sea amable'),/Que sea amable/);
+});
