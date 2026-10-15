@@ -53,3 +53,12 @@ Comprueba respaldos, combinación sin duplicados, fechas y plantillas. Los archi
 - Los respaldos son versión 2 y conservan documentos y simulaciones. La app sigue importando respaldos versión 1 y asigna Corretaje a consultas antiguas. El almacenamiento usa la misma clave para conservar fichas existentes.
 
 Al actualizar, recarga la aplicación. Exporta un respaldo antes de cambiar de dominio o dispositivo. Las comprobaciones automatizadas cubren migración, respaldos, fechas, documentos y generación de mensajes/prompts. También se verificó el flujo de la interfaz mediante simulación DOM (crear ficha, editar documentos, filtrar, copiar y guardar); no se realizó una revisión visual en un navegador en este entorno.
+
+
+## Versión 0.3: Recordatorios y calendario
+- Cada próximo seguimiento tiene fecha y hora local del dispositivo. Se puede marcar como hecho o volver a pendiente sin cerrar la consulta; los hechos no se cuentan en pendientes de hoy. Cambiar la acción, fecha u hora crea un nuevo pendiente; editar otras notas conserva su finalización.
+- “Descargar para calendario (.ics)” genera un evento de 15 minutos, con un aviso solicitado 1 minuto antes. El nombre del cliente y la próxima acción se incluyen; no se incluyen documentos, teléfono ni correo. La app de calendario debe admitir importar .ics y conservar/configurar el aviso. No se garantiza compatibilidad con todos los teléfonos.
+- “Probar aviso” genera un evento ficticio aproximadamente cinco minutos después. Abre el archivo en Calendario, confirma su fecha/hora y guarda el evento. Puedes eliminarlo al terminar la prueba. Si el sistema no ofrece una app compatible, ese teléfono necesitará otra vía de importación.
+- “Abrir Google Calendar” abre un borrador; selecciona la cuenta y el calendario correctos, configura el aviso y guarda. No hay API, credenciales o conexión permanente.
+- Ninguna exportación se sincroniza. Completar, editar o borrar en Cartera no cambia los eventos existentes; importar varias veces puede duplicarlos según la app. Los recordatorios externos los gestiona el calendario y sus permisos de notificación.
+- Respaldos versión 3: conservan hora y finalización y siguen importando versiones 1 y 2.
