@@ -390,7 +390,7 @@ function openAssistant(){
 }
 $('#assistant-new').onclick=()=>{
  if(assistantBusy||aiSendRequest)return;if((assistantMessages.length||$('#assistant-input').value)&&!confirm('¿Borrar este chat y comenzar otro? Las fichas guardadas se conservan.'))return;
- invalidateAssistant();assistantMessages=[];$('#assistant-input').value='';assistantChatContextId=current()?.id||null;updateAssistantContext();renderAssistantChat();$('#assistant-progress').textContent='Nueva conversación. Las fichas guardadas se conservan.';commit(clients);
+ invalidateAssistant();assistantVoice.clearPunctuationUndo();assistantMessages=[];$('#assistant-input').value='';assistantChatContextId=current()?.id||null;updateAssistantContext();renderAssistantChat();$('#assistant-progress').textContent='Nueva conversación. Las fichas guardadas se conservan.';commit(clients);
 };
 $('#assistant-chat-form').onsubmit=async event=>{
  event.preventDefault();if(assistantBusy||readOnly||aiSendRequest)return;assistantVoice.stop();let key,prompt,instruction,context,baseline;
@@ -404,7 +404,7 @@ $('#assistant-chat-form').onsubmit=async event=>{
  invalidateAssistant();assistantBusy=true;const controller=new AbortController();assistantAbort=controller;$('#assistant-prepare').disabled=true;$('#assistant-new').disabled=true;$('#assistant-context').disabled=true;$('#assistant-input').readOnly=true;$('#assistant-talk').disabled=true;renderAssistantChat(instruction);$('#assistant-progress').textContent='Carterita está respondiendo… Todavía no se cambiará ninguna ficha.';
  try{
   const raw=await requestAssistantPlan({key,prompt,signal:controller.signal});const plan=parseAssistantPlan(raw,context);if(controller.signal.aborted||$('#assistant-input').value!==instruction||readOnly)return;
-  const reply=[plan.summary,...plan.questions.map(q=>'• '+q)].filter(Boolean).join('\n');assistantMessages.push({role:'user',content:instruction},{role:'assistant',content:reply||'Puedes revisar las acciones propuestas.'});$('#assistant-input').value='';renderAssistantChat();
+  const reply=[plan.summary,...plan.questions.map(q=>'• '+q)].filter(Boolean).join('\n');assistantMessages.push({role:'user',content:instruction},{role:'assistant',content:reply||'Puedes revisar las acciones propuestas.'});$('#assistant-input').value='';assistantVoice.clearPunctuationUndo();renderAssistantChat();
   assistantPlan=plan;assistantContext=context;assistantBaseline=baseline;$('#assistant-response').textContent=reply;$('#assistant-response-block').hidden=false;$('#assistant-review').hidden=!plan.items.length;$('#assistant-ready-hint').hidden=!plan.items.length;$('#assistant-progress').textContent=plan.items.length?'Propuesta lista para revisar. También puedes pedirme cambios por el chat.':'Responde aquí abajo; conservaré lo que ya me contaste.';commit(clients);assistantVoice.speakIfEnabled();
  }catch(err){renderAssistantChat();$('#assistant-progress').textContent=err.message;}finally{assistantBusy=false;assistantAbort=null;$('#assistant-prepare').disabled=false;$('#assistant-new').disabled=false;$('#assistant-input').readOnly=false;$('#assistant-talk').disabled=!(window.SpeechRecognition||window.webkitSpeechRecognition);updateAssistantContext();}
 };

@@ -59,3 +59,15 @@ test('conversation and composer survive package round trip without executable HT
  assert.throws(()=>cleanAssistantConversation({...chat,messages:[{role:'system',content:'invalid'}]}),/inválido/);
  assert.throws(()=>cleanAssistantConversation({...chat,messages:Array.from({length:3},()=>({role:'user',content:'x'.repeat(6000)}))}),/demasiado larga/);
 });
+
+import {normalizeSpokenPunctuation} from '../docs/assistant.js';
+test('spoken punctuation handles Spanish questions, separators and line breaks without changing prices or ordinary phrases',()=>{
+ assert.equal(normalizeSpokenPunctuation('Hola coma cómo estás signo de pregunta'),'Hola, ¿cómo estás?');
+ assert.equal(normalizeSpokenPunctuation('abre interrogación Cuándo puede venir cierra interrogación'),'¿Cuándo puede venir?');
+ assert.equal(normalizeSpokenPunctuation('Documentos dos puntos nueva línea liquidaciones punto y coma cédula punto final'),'Documentos:\nliquidaciones; cédula.');
+ assert.equal(normalizeSpokenPunctuation('Nuevo párrafo Cliente nuevo'),'Cliente nuevo');
+ assert.equal(normalizeSpokenPunctuation('Hola nuevo párrafo Cliente nuevo'),'Hola\n\nCliente nuevo');
+ const unchanged='Presupuesto 600.000, teléfono +56 9 1234 5678, punto de encuentro en Coronel. Paula Comas.';
+ assert.equal(normalizeSpokenPunctuation(unchanged),unchanged);
+ assert.equal(normalizeSpokenPunctuation('¿Cómo está?'),'¿Cómo está?');
+});

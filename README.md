@@ -196,3 +196,10 @@ Cada envío incluye el historial de ese chat y el contexto de ficha seleccionado
 En la ficha, abre «Mensaje» y elige «Personalizado · otro tema» en «¿Qué quieres decirle?». Aparece un campo libre para indicar el propósito y los datos confirmados, sin depender de las plantillas. «Redactar con IA» prepara un mensaje nuevo usando el perfil de escritura, con vista previa del envío y revisión de la propuesta antes de sustituir el borrador. Comparte el límite de 20 peticiones diarias. Si falta una clave, abre la configuración; una indicación vacía no hace peticiones.
 
 «Preparar para ChatGPT» crea instrucciones copiables sin llamar a la API. El objetivo personalizado se conserva por cliente en la sesión y en los paquetes. Las plantillas existentes siguen funcionando sin IA y la indicación no cambia el perfil general de escritura.
+
+
+## Versión 0.17: Puntuación del dictado
+
+El botón «Hablar» interpreta localmente órdenes como coma, punto, signo de pregunta, abrir/cerrar interrogación, dos puntos y nueva línea. La opción se puede desactivar en «Ayuda para dictar» y se conserva solo en este dispositivo. Hay un botón visible para deshacer la puntuación y recuperar el texto recibido del reconocimiento. No se envía el mensaje automáticamente.
+
+Si se utiliza el micrófono del teclado, «Aplicar puntuación dictada» transforma esas expresiones en el texto existente, con opción de deshacer. Esto es una transformación de texto local, no un nuevo servicio de transcripción: no mejora el reconocimiento acústico ni corrige nombres, fechas o palabras mal escuchadas. Las palabras de puntuación se interpretan como órdenes cuando se activa la función; si se desean literalmente, desactívala o deshaz los cambios. No añade peticiones de OpenAI y no almacena grabaciones.

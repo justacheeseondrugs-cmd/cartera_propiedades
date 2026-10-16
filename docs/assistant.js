@@ -42,23 +42,52 @@ export async function requestAssistantPlan({key,prompt,signal,fetcher=fetch}){
   const choice=data?.choices?.[0];if(choice?.finish_reason!=='stop'||typeof choice.message?.content!=='string'||choice.message.content.length>60000)throw new Error('La propuesta llegó incompleta. No se modificó nada.');return choice.message.content;
  }catch(err){if(err.name==='AbortError')throw new Error('Petición cancelada o demasiado lenta. No se reintentó; OpenAI podría haberla procesado.');if(err instanceof TypeError)throw new Error('No se pudo conectar con OpenAI. No se reintentó.');throw err;}finally{clearTimeout(timer);signal?.removeEventListener('abort',abort);}
 }
+export function normalizeSpokenPunctuation(value){
+ let text=String(value||'');
+ const commands=[
+  ['(?:abrir|abre|apertura de)(?: el)?(?: signo de)? (?:pregunta|interrogaci[oó]n)','¿'],
+  ['(?:cerrar|cierra|cierre de)(?: el)?(?: signo de)? (?:pregunta|interrogaci[oó]n)','?'],
+  ['(?:abrir|abre|apertura de)(?: el)?(?: signo de)? (?:exclamaci[oó]n|admiraci[oó]n)','¡'],
+  ['(?:cerrar|cierra|cierre de)(?: el)?(?: signo de)? (?:exclamaci[oó]n|admiraci[oó]n)','!'],
+  ['(?:signo (?:de )?(?:pregunta|interrogaci[oó]n|interrogante))(?: de cierre)?','?'],
+  ['signo de (?:exclamaci[oó]n|admiraci[oó]n)','!'],
+  ['(?:nuevo p[aá]rrafo|p[aá]rrafo nuevo)','\n\n'],
+  ['(?:nueva l[ií]nea|l[ií]nea nueva|salto de l[ií]nea)','\n'],
+  ['punto y aparte','.\n\n'],['punto y seguido','. '],['punto y coma',';'],['dos puntos',':'],['punto final','.'],['punto(?! de\\b)','.'],['coma',','],
+ ];
+ for(const [phrase,replacement] of commands){const regex=new RegExp('(?<![\\p{L}\\p{N}])'+phrase+'(?![\\p{L}\\p{N}])','giu');text=text.replace(regex,replacement.replaceAll('\\n','\n'));}
+ text=text.replace(/[ \t]+([,.;:?!])/g,'$1').replace(/([¿¡])[ \t]+/g,'$1').replace(/[ \t]*\n[ \t]*/g,'\n').replace(/[ \t]{2,}/g,' ').trim();
+ // Add the Spanish opening mark only to a recognizable question, never by guessing a date or a client fact.
+ text=text.replace(/([^.!?\n¿]*?)\?/gu,(whole,prefix,offset,source)=>{
+  if(offset>0&&source[offset-1]==='¿')return whole;
+  const split=prefix.lastIndexOf(',')+1,head=prefix.slice(0,split),tail=prefix.slice(split),question=tail.trimStart();
+  if(!/^(?:qu[eé]|c[oó]mo|cu[aá]ndo|d[oó]nde|qui[eé]n(?:es)?|cu[aá]l(?:es)?|cu[aá]nt[oa]s?|pued(?:e|es|o|en)|podr[ií]a(?:s|n)?|tien(?:e|es|en)|hay|est[aá](?:s|n)?|me|le|te)\b/iu.test(question)||/(?:https?:|www\.)/i.test(question))return whole;
+  return head+tail.slice(0,tail.length-question.length)+'¿'+question+'?';
+ });
+ return text;
+}
 export function setupAssistantVoice({input,button,status,readButton,readEnabled,response,dialog}){
- const view=input.ownerDocument.defaultView,Recognition=view.SpeechRecognition||view.webkitSpeechRecognition;let recognition=null;
- const stop=()=>{const active=recognition;recognition=null;try{active?.abort();}catch{}input.readOnly=false;button.textContent='Hablar';view.speechSynthesis?.cancel();};
+ const view=input.ownerDocument.defaultView,Recognition=view.SpeechRecognition||view.webkitSpeechRecognition;let recognition=null,undoText=null,undoResult=null;const punctuation=input.ownerDocument.querySelector('#assistant-punctuation'),punctuate=input.ownerDocument.querySelector('#assistant-punctuate'),undo=input.ownerDocument.querySelector('#assistant-dictation-undo');
+ const setUndo=(value,result=null)=>{undoText=value;undoResult=result;if(undo){undo.hidden=value===null;undo.disabled=Boolean(recognition);}};
+ const applyPunctuation=()=>{const original=input.value,formatted=normalizeSpokenPunctuation(original);if(formatted!==original){setUndo(original,formatted);input.value=formatted;input.dispatchEvent(new view.Event('input',{bubbles:true}));status.textContent='Puntuación aplicada. Revisa nombres, fechas y el sentido antes de enviar.';}else status.textContent='No encontré órdenes de puntuación para cambiar. Puedes editar el texto.';};
+ if(punctuate)punctuate.onclick=applyPunctuation;if(undo)undo.onclick=()=>{if(undoText===null)return;input.value=undoText;setUndo(null);input.dispatchEvent(new view.Event('input',{bubbles:true}));status.textContent='Restauré el texto anterior. Puedes corregirlo a mano.';};
+ input.addEventListener('input',()=>{if(!recognition&&undoText!==null&&input.value!==undoResult)setUndo(null);});
+ const stop=()=>{const active=recognition;recognition=null;try{active?.abort();}catch{}input.readOnly=false;button.textContent='Hablar';if(punctuate)punctuate.disabled=false;if(undo)undo.disabled=false;view.speechSynthesis?.cancel();};
  button.disabled=!Recognition;if(!Recognition)status.textContent='Si no aparece el dictado aquí, usa el micrófono del teclado del teléfono o escribe.';
  button.onclick=()=>{
-  if(recognition){recognition.stop();return;}view.speechSynthesis?.cancel();const base=input.value.trim();recognition=new Recognition();const active=recognition;recognition.lang='es-CL';recognition.continuous=false;recognition.interimResults=true;input.readOnly=true;button.textContent='Terminar dictado';status.textContent='Escuchando… Revisa el texto antes de enviarlo.';
-  recognition.onresult=event=>{if(recognition!==active)return;let text='';for(let i=0;i<event.results.length;i++)text+=event.results[i][0].transcript+' ';input.value=((base?base+'\n':'')+text.trim()).slice(0,6000);input.dispatchEvent(new view.Event('input',{bubbles:true}));};
+  if(recognition){recognition.stop();return;}view.speechSynthesis?.cancel();const base=input.value.trim();setUndo(null);if(punctuate)punctuate.disabled=true;recognition=new Recognition();const active=recognition;recognition.lang='es-CL';recognition.continuous=false;recognition.interimResults=true;input.readOnly=true;button.textContent='Terminar dictado';status.textContent='Escuchando… Revisa el texto antes de enviarlo.';
+  recognition.onresult=event=>{if(recognition!==active)return;let text='';for(let i=0;i<event.results.length;i++)text+=event.results[i][0].transcript+' ';const raw=text.trim(),formatted=punctuation?.checked?normalizeSpokenPunctuation(raw):raw;input.value=((base?base+'\n':'')+formatted).slice(0,6000);setUndo(raw!==formatted?((base?base+'\n':'')+raw).slice(0,6000):null,input.value);input.dispatchEvent(new view.Event('input',{bubbles:true}));};
   recognition.onerror=event=>{if(recognition!==active)return;status.textContent=event.error==='not-allowed'?'No se permitió el micrófono. Puedes escribir o usar el dictado del teclado.':'No pude completar el dictado. Revisa el texto o vuelve a intentarlo.';};
-  recognition.onend=()=>{if(recognition!==active)return;recognition=null;input.readOnly=false;button.textContent='Hablar';};try{recognition.start();}catch{stop();status.textContent='No se pudo abrir el micrófono. Puedes escribir.';}
+  recognition.onend=()=>{if(recognition!==active)return;recognition=null;input.readOnly=false;button.textContent='Hablar';if(punctuate)punctuate.disabled=false;if(undo)undo.disabled=false;if(status.textContent.startsWith('Escuchando'))status.textContent='Dictado terminado. Revisa el texto o toca Deshacer puntuación si cambió algo que querías conservar.';};try{recognition.start();}catch{stop();status.textContent='No se pudo abrir el micrófono. Puedes escribir.';}
  };
  const doc=input.ownerDocument,voiceSelect=doc.querySelector('#assistant-voice'),speed=doc.querySelector('#assistant-speed'),test=doc.querySelector('#assistant-voice-test');
  let saved={};try{saved=JSON.parse(view.localStorage.getItem('cartera-assistant-voice')||'{}')||{};}catch{}
+ if(punctuation)punctuation.checked=saved.punctuation!==false;
  if(speed&&['0.85','0.95','1.1'].includes(saved.rate))speed.value=saved.rate;
  const populate=()=>{if(!voiceSelect)return;const selected=voiceSelect.value||saved.voice||'';voiceSelect.replaceChildren();const option=doc.createElement('option');option.value='';option.textContent='Voz predeterminada en español';voiceSelect.append(option);for(const voice of view.speechSynthesis?.getVoices()||[]){const item=doc.createElement('option');item.value=voice.voiceURI;item.textContent=voice.name+' ('+voice.lang+')';voiceSelect.append(item);}if([...voiceSelect.options].some(o=>o.value===selected))voiceSelect.value=selected;};
- const saveVoice=()=>{saved={voice:voiceSelect?.value||'',rate:speed?.value||'0.95'};try{view.localStorage.setItem('cartera-assistant-voice',JSON.stringify(saved));}catch{status.textContent='No se pudo guardar la elección de voz en este dispositivo.';}};
- voiceSelect?.addEventListener('change',saveVoice);speed?.addEventListener('change',saveVoice);view.speechSynthesis?.addEventListener('voiceschanged',populate);populate();
+ const saveVoice=()=>{saved={voice:voiceSelect?.value||'',rate:speed?.value||'0.95',punctuation:punctuation?.checked!==false};try{view.localStorage.setItem('cartera-assistant-voice',JSON.stringify(saved));}catch{status.textContent='No se pudo guardar la elección de voz en este dispositivo.';}};
+ punctuation?.addEventListener('change',saveVoice);voiceSelect?.addEventListener('change',saveVoice);speed?.addEventListener('change',saveVoice);view.speechSynthesis?.addEventListener('voiceschanged',populate);populate();
  const speak=(sample=false)=>{if(!view.speechSynthesis||!view.SpeechSynthesisUtterance||input.ownerDocument.hidden||input.ownerDocument.documentElement.classList.contains('device-locked'))return;view.speechSynthesis.cancel();const utterance=new view.SpeechSynthesisUtterance(sample?'Hola, soy tu asistente de Carterita. Vamos paso a paso.':response.textContent.slice(0,1800));utterance.lang='es-CL';utterance.rate=Number(speed?.value||.95);const voices=view.speechSynthesis.getVoices(),voice=voices.find(v=>v.voiceURI===voiceSelect?.value)||voices.find(v=>v.lang.toLowerCase().startsWith('es'));if(voice)utterance.voice=voice;view.speechSynthesis.speak(utterance);};
  readButton.disabled=!view.speechSynthesis;readButton.onclick=()=>speak();if(test){test.disabled=!view.speechSynthesis;test.onclick=()=>speak(true);}dialog.addEventListener('close',stop);input.ownerDocument.addEventListener('visibilitychange',()=>{if(input.ownerDocument.hidden)stop();});
- return {stop,speakIfEnabled:()=>{if(readEnabled.checked)speak();}};
+ return {stop,clearPunctuationUndo:()=>setUndo(null),speakIfEnabled:()=>{if(readEnabled.checked)speak();}};
 }
