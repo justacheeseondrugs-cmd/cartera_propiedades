@@ -178,3 +178,14 @@ Necesita una clave de OpenAI configurada en ese navegador para preparar propuest
 El dictado usa la capacidad del navegador, que puede depender de servicios en línea; no se guardan grabaciones en Carterita. Si no está disponible, se puede usar el micrófono del teclado o escribir. La lectura opcional usa síntesis de voz del navegador: permite probar y elegir las voces disponibles y ajustar la velocidad. Estas preferencias se guardan solo en el dispositivo. Se detiene al cerrar el diálogo o esconder la aplicación. No requiere una petición adicional a OpenAI. La disponibilidad y el sonido deben verificarse en cada teléfono.
 
 Las propuestas aún sin confirmar y el texto de la petición permanecen solo en la página abierta; no se incluyen en los respaldos. Una vez confirmados, los clientes, documentos de checklist y borradores se guardan y respaldan con el flujo habitual.
+
+
+## Versión 0.15: Chat con contexto
+
+El asistente ahora muestra una conversación y conserva las peticiones y respuestas anteriores, de modo que se puede contestar «sin recordatorio» o completar un nombre sin repetir el resto. La nueva propuesta sustituye a la anterior; solo la revisión y confirmación guardan cambios. Las acciones confirmadas dejan un evento local en el chat para que la IA no las vuelva a proponer como pendientes.
+
+Crear una ficha requiere un nombre o alias, pero no exige teléfono, presupuesto, intención, próximo paso ni recordatorio. Esos campos pueden completarse después. Una solicitud de agenda con fecha ambigua puede generar una pregunta sin bloquear la ficha que ya tiene datos suficientes.
+
+El chat y el mensaje sin enviar se guardan en la sesión local y en los paquetes de respaldo. Al recargar se recupera la conversación; las propuestas sin confirmar deben prepararse de nuevo antes de guardarlas. «Nueva conversación» borra el chat actual sin borrar clientes. El chat se limita a 32 mensajes y 16.000 caracteres; se pide comenzar otro antes de superar el límite, sin descartar silenciosamente el contexto antiguo. No se copian claves API al historial ni al respaldo.
+
+Cada envío incluye el historial de ese chat y el contexto de ficha seleccionado, visibles en la confirmación previa. No hay llamadas de IA al dictar, escuchar, recuperar la sesión o abrir la revisión. Cada mensaje enviado comparte el límite existente de 20 peticiones diarias.

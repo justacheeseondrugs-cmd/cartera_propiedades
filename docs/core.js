@@ -209,6 +209,13 @@ ${text.slice(0,10000)}`;
 }
 
 // Session packages only accept explicit UI fields, never arbitrary storage or API keys.
+export function cleanAssistantConversation(value){
+ if(!value)return null;
+ if(typeof value!=='object'||Array.isArray(value)||!Array.isArray(value.messages)||value.messages.length>32)throw new Error('Conversación del asistente inválida.');
+ const messages=value.messages.map(m=>{if(!m||!['user','assistant','saved'].includes(m.role)||typeof m.content!=='string'||!m.content.trim()||m.content.length>6000)throw new Error('Mensaje del asistente inválido.');return {role:m.role,content:m.content};});
+ if(messages.reduce((sum,m)=>sum+m.content.length,0)>16000||typeof value.draft!=='string'||value.draft.length>6000)throw new Error('La conversación es demasiado larga.');
+ return {messages,draft:value.draft,contextId:typeof value.contextId==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(value.contextId)?value.contextId:null};
+}
 export function sessionFromBackup(text){
  const b=JSON.parse(text);parseBackup(text);if(!b.session)return null;
  const s=b.session;if(typeof s!=='object'||Array.isArray(s))throw new Error('Sesión de respaldo inválida.');
@@ -220,5 +227,6 @@ export function sessionFromBackup(text){
  const composers=s.composers.filter(x=>x&&ids.has(x.id)).map(x=>({id:x.id,original:str(x.original,5000),style:styles.includes(x.style)?x.style:'initial',tone:x.tone==='formal'?'formal':'warm',prompt:str(x.prompt,30000),extra:str(x.extra,1000),adjustments:Array.isArray(x.adjustments)?[...new Set(x.adjustments.filter(k=>Object.hasOwn(MESSAGE_ADJUSTMENTS,k)))]:[]}));
  let proposal=null;const p=s.proposal;
  if(p&&ids.has(p.clientId)&&typeof p.original==='string'&&typeof p.text==='string'&&p.original.length<=10000&&p.text.trim()&&p.text.length<=10000)proposal={clientId:p.clientId,original:p.original,text:p.text};
- return {selected:ids.has(s.selected)?s.selected:null,panel:panels.includes(s.panel)?s.panel:'summary',composers,proposal};
+ const assistant=cleanAssistantConversation(s.assistant);if(assistant&&!ids.has(assistant.contextId))assistant.contextId=null;
+ return {selected:ids.has(s.selected)?s.selected:null,panel:panels.includes(s.panel)?s.panel:'summary',composers,proposal,...(assistant?{assistant}:{})};
 }

@@ -35,3 +35,27 @@ test('assistant makes one bounded request, shares no key in prompt, and rejects 
  await assert.rejects(requestAssistantPlan({key:'test',prompt:'Hola',fetcher:async()=>({ok:false,status:429,json:async()=>({})})}),/límite/);
  await assert.rejects(requestAssistantPlan({key:'test',prompt:'Hola',fetcher:async()=>({ok:true,json:async()=>({choices:[{finish_reason:'length',message:{content:raw}}]})})}),/incompleta/);
 });
+
+test('a partial new-client proposal saves confirmed search data without optional contacts, intent or reminder',()=>{
+ const p=parseAssistantPlan(plan({mode:'new',client:{name:'Cliente de prueba',businessArea:'Corretaje',area:'Coronel'}}));
+ const saved=applyAssistantPlan([], [{...p.items[0],choice:'new'}],{},()=> 'partial','2026-10-16T12:00:00.000Z')[0];
+ assert.equal(saved.area,'Coronel');assert.equal(saved.intent,'Por definir');
+ for(const field of ['phone','email','budget','nextAction','followup','followupTime'])assert.equal(saved[field],'',field);
+ assert.equal(saved.status,'Nuevo');
+});
+
+test('follow-up prompts retain the earlier client and question while including only the new reply once',()=>{
+ const history=[{role:'user',content:'Agrega a Cliente Ejemplo, busca en Coronel.'},{role:'assistant',content:'¿Desea un recordatorio?' }];
+ const prompt=assistantPrompt('Sin recordatorio',null,INITIAL_WRITING_PROFILE,new Date(2026,9,16),{},history);
+ assert.match(prompt,/Cliente Ejemplo/);assert.match(prompt,/Coronel/);assert.match(prompt,/Desea un recordatorio/);assert.match(prompt,/Sin recordatorio/);
+ assert.throws(()=>assistantPrompt('Hola',null,INITIAL_WRITING_PROFILE,new Date(),{},Array.from({length:30},()=>({role:'user',content:'Texto'}))),/chat ya es largo/);
+});
+
+import {sessionFromBackup,cleanAssistantConversation} from '../docs/core.js';
+test('conversation and composer survive package round trip without executable HTML or provider credentials',()=>{
+ const chat={messages:[{role:'user',content:'Cliente <script> de prueba, Coronel'},{role:'assistant',content:'¿Desea un recordatorio?'},{role:'saved',content:'La aplicación guardó la propuesta.'}],draft:'Sin recordatorio',contextId:client.id,apiKey:'must-not-be-included'};
+ const result=sessionFromBackup(JSON.stringify({app:'cartera',version:7,clients:[client],session:{selected:null,panel:'summary',composers:[],assistant:chat}}));
+ assert.equal(result.assistant.messages[0].content,chat.messages[0].content);assert.equal(result.assistant.draft,'Sin recordatorio');assert.equal(result.assistant.contextId,client.id);assert.equal(Object.hasOwn(result.assistant,'apiKey'),false);
+ assert.throws(()=>cleanAssistantConversation({...chat,messages:[{role:'system',content:'invalid'}]}),/inválido/);
+ assert.throws(()=>cleanAssistantConversation({...chat,messages:Array.from({length:3},()=>({role:'user',content:'x'.repeat(6000)}))}),/demasiado larga/);
+});

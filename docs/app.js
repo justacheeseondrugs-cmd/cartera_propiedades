@@ -8,7 +8,7 @@ import {cleanRecord,parseBackup,mergeRecords,missingFields,prepareReply,prepareP
 const $=s=>document.querySelector(s),KEY='cartera-v1';
 let clients=[],selected=null,stat='today',businessArea='all',incoming=null,draftTimer,toastTimer,formDocuments=[],readOnly=false,savedPrompt=null,formContext="general",detailPanel="summary";
 let aiBusy=false,aiProposal=null,incomingSession=null,incomingFiles=[];
-const contexts=new Map();let writingProfile=cleanWritingProfile(INITIAL_WRITING_PROFILE),writingExamples=[],incomingProfile=null;let packageEntries=[];let packageAssistant=false,assistantBaseline={},assistantPlan=null,assistantContext=null,assistantBusy=false,assistantAbort=null;
+const contexts=new Map();let writingProfile=cleanWritingProfile(INITIAL_WRITING_PROFILE),writingExamples=[],incomingProfile=null;let packageEntries=[];let packageAssistant=false,assistantBaseline={},assistantPlan=null,assistantContext=null,assistantBusy=false,assistantAbort=null,assistantMessages=[],assistantChatContextId=null;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dateLabel=d=>d?new Date(d+'T12:00:00').toLocaleDateString('es-CL',{day:'numeric',month:'short',year:'numeric'}):'Sin fecha';
 const awaiting=c=>c.businessArea==='Leasing'&&c.status!=='Cerrado'&&['Solicitada','En curso','Esperando respuesta'].includes(c.simulationStatus);
@@ -279,8 +279,8 @@ $('#package-review-form').onsubmit=e=>{
   const decisions=packageEntries.map(entry=>({entry,choice:entry.choice,...(packageAssistant?{draft:entry.assistantDraft,completeFollowup:entry.completeFollowup}:{})}));const additions=decisions.filter(d=>d.choice==='new');
   const repeated=additions.filter((d,i)=>clientMatches(d.entry.data,clients).length||clientMatches(d.entry.data,additions.slice(0,i).map(x=>x.entry.data)).length);
   if(repeated.length&&!confirm('Hay '+repeated.length+' ficha(s) nuevas con posibles coincidencias. ¿Crear igualmente como clientes separados?'))return;
-  const next=packageAssistant?applyAssistantPlan(clients,decisions,assistantBaseline):applyClientPackage(clients,decisions);if(!commit(next))return;
-  packageEntries=[];$('#package-review-form').hidden=true;$('#package-preview').replaceChildren();$('#package-text').value='';$('#package-file').value='';$('#package-dialog').close();selected=null;stat='all';businessArea='all';$('#search').value='';$('#filter-status').value='';$('#filter-intent').value='';document.querySelectorAll('[data-area]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.area==='all')));render();toast(packageAssistant?'Acciones guardadas. Los mensajes quedaron como borradores; revisa el estado de los recordatorios en las fichas.':'Fichas guardadas. Puedes abrirlas para confirmar lo que falta.');if(packageAssistant){assistantPlan=null;$('#assistant-review').hidden=true;$('#assistant-response').textContent='Acciones guardadas. Los mensajes no se enviaron a WhatsApp.';}packageAssistant=false;
+  const next=packageAssistant?applyAssistantPlan(clients,decisions,assistantBaseline):applyClientPackage(clients,decisions);if(packageAssistant)assistantMessages.push({role:'saved',content:'La usuaria confirmó y la aplicación guardó la última propuesta. Los mensajes quedaron como borradores, no se enviaron a WhatsApp.'});if(!commit(next)){if(packageAssistant)assistantMessages.pop();return;}
+  packageEntries=[];$('#package-review-form').hidden=true;$('#package-preview').replaceChildren();$('#package-text').value='';$('#package-file').value='';$('#package-dialog').close();selected=null;stat='all';businessArea='all';$('#search').value='';$('#filter-status').value='';$('#filter-intent').value='';document.querySelectorAll('[data-area]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.area==='all')));render();toast(packageAssistant?'Acciones guardadas. Los mensajes quedaron como borradores; revisa el estado de los recordatorios en las fichas.':'Fichas guardadas. Puedes abrirlas para confirmar lo que falta.');if(packageAssistant){renderAssistantChat();assistantPlan=null;$('#assistant-ready-hint').hidden=true;$('#assistant-review').hidden=true;$('#assistant-response').textContent='Acciones guardadas. Los mensajes no se enviaron a WhatsApp.';}packageAssistant=false;
  }catch(err){$('#package-error').textContent=err.message;$('#package-error').scrollIntoView({block:'nearest'});}
 };
 function saveSessionLocally(){if(!readOnly&&flushDraft())commit(clients);}
@@ -317,10 +317,11 @@ async function runCorrection(){
 }
 
 function captureSession(data=clients){
- saveContext();const raw={app:'cartera',version:7,clients:data,session:{selected,panel:detailPanel,composers:[...contexts].map(([id,value])=>({id,...value})),proposal:aiProposal?{...aiProposal,text:$('#ai-proposal').value}:null}};
+ saveContext();const raw={app:'cartera',version:7,clients:data,session:{assistant:{messages:assistantMessages,draft:$('#assistant-input').value,contextId:assistantChatContextId},selected,panel:detailPanel,composers:[...contexts].map(([id,value])=>({id,...value})),proposal:aiProposal?{...aiProposal,text:$('#ai-proposal').value}:null}};
  return sessionFromBackup(JSON.stringify(raw));
 }
 function restoreSession(session){
+ invalidateAssistant();const chat=session.assistant;assistantMessages=chat?.messages||[];assistantChatContextId=chat?.contextId||null;$('#assistant-input').value=chat?.draft||'';renderAssistantChat();if(assistantMessages.length)$('#assistant-progress').textContent='Conversación recuperada. Puedes continuar aquí; las propuestas sin guardar deben prepararse de nuevo antes de confirmarlas.';
  for(const context of session.composers)if(clients.some(c=>c.id===context.id))contexts.set(context.id,context);
  selected=session.selected;detailPanel=session.panel;stat='all';businessArea='all';$('#search').value='';$('#filter-status').value='';$('#filter-intent').value='';document.querySelectorAll('[data-area]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.area==='all')));render();
  const p=session.proposal;if(p&&clients.some(c=>c.id===p.clientId&&c.draft===p.original)){aiProposal={clientId:p.clientId,original:p.original};$('#ai-original').textContent=p.original;$('#ai-proposal').value=p.text;selected=p.clientId;detailPanel='message';render();$('#ai-review-dialog').showModal();}
@@ -371,24 +372,37 @@ window.addEventListener('carterita-reminder-state',refreshClientReminderStates);
 refreshClientReminderStates();
 
 const assistantVoice=setupAssistantVoice({input:$('#assistant-input'),button:$('#assistant-talk'),status:$('#assistant-voice-state'),readButton:$('#assistant-listen'),readEnabled:$('#assistant-read'),response:$('#assistant-response'),dialog:$('#assistant-dialog')});
-function openAssistant(){
- if(readOnly||!flushDraft())return;invalidateAssistant();const c=current();$('#assistant-context').disabled=!c;$('#assistant-context').checked=Boolean(c);$('#assistant-context-label').textContent=c?'Usar datos resumidos de '+c.name:'Sin ficha abierta: puedes crear o mencionar un cliente';$('#assistant-dialog').showModal();
+function renderAssistantChat(pending=''){
+ const log=$('#assistant-chat-log');log.replaceChildren();
+ if(!assistantMessages.length&&!pending){const hello=document.createElement('p');hello.className='assistant-chat-empty';hello.textContent='Hola, ¿qué necesitas organizar hoy? Puedes contarme los datos de a poco.';log.append(hello);}
+ for(const message of [...assistantMessages,...(pending?[{role:'user',content:pending}]:[])]){const bubble=document.createElement('article');bubble.className='assistant-chat-message assistant-chat-'+message.role;const label=document.createElement('strong');label.textContent=message.role==='user'?'Tú':message.role==='saved'?'Guardado en Carterita':'Carterita';const text=document.createElement('p');text.textContent=message.content;bubble.append(label,text);log.append(bubble);}
+ log.scrollTop=log.scrollHeight;
 }
-$('#assistant-prepare').onclick=async()=>{
- if(assistantBusy||readOnly||aiSendRequest)return;assistantVoice.stop();let key,prompt,instruction,context,baseline;
+function updateAssistantContext(){
+ const c=clients.find(c=>c.id===assistantChatContextId);$('#assistant-context').disabled=!c;$('#assistant-context').checked=Boolean(c);$('#assistant-context-label').textContent=c?'Usar datos resumidos de '+c.name:'Sin ficha de contexto: puedes crear o mencionar un cliente';
+}
+function openAssistant(){
+ if(readOnly||!flushDraft())return;if(!assistantMessages.length)assistantChatContextId=current()?.id||null;updateAssistantContext();renderAssistantChat();$('#assistant-dialog').showModal();
+}
+$('#assistant-new').onclick=()=>{
+ if(assistantBusy||aiSendRequest)return;if((assistantMessages.length||$('#assistant-input').value)&&!confirm('¿Borrar este chat y comenzar otro? Las fichas guardadas se conservan.'))return;
+ invalidateAssistant();assistantMessages=[];$('#assistant-input').value='';assistantChatContextId=current()?.id||null;updateAssistantContext();renderAssistantChat();$('#assistant-progress').textContent='Nueva conversación. Las fichas guardadas se conservan.';commit(clients);
+};
+$('#assistant-chat-form').onsubmit=async event=>{
+ event.preventDefault();if(assistantBusy||readOnly||aiSendRequest)return;assistantVoice.stop();let key,prompt,instruction,context,baseline;
  try{
-  key=localStorage.getItem(AI_KEY);if(!key){openAISettings();return;}if(navigator.onLine===false)throw new Error('Necesitas conexión para preparar acciones con IA.');
-  instruction=$('#assistant-input').value;context=$('#assistant-context').checked?current():null;baseline=Object.fromEntries(clients.map(c=>[c.id,c.updatedAt]));
-  prompt=assistantPrompt(instruction,context,writingProfile,new Date(),{porContactarHoy:clients.filter(c=>dueToday(c)).length});
+  key=localStorage.getItem(AI_KEY);if(!key){openAISettings();return;}if(navigator.onLine===false)throw new Error('Necesitas conexión para conversar con la IA.');
+  instruction=$('#assistant-input').value;context=$('#assistant-context').checked?clients.find(c=>c.id===assistantChatContextId):null;baseline=Object.fromEntries(clients.map(c=>[c.id,c.updatedAt]));
+  prompt=assistantPrompt(instruction,context,writingProfile,new Date(),{porContactarHoy:clients.filter(c=>dueToday(c)).length},assistantMessages);
   if(!await confirmAISend(prompt,ASSISTANT_SYSTEM))return;
-  if($('#assistant-input').value!==instruction||readOnly)throw new Error('La petición cambió. Revísala antes de volver a preparar.');
-  reserveCorrection(localStorage,localDate());
+  if($('#assistant-input').value!==instruction||readOnly)throw new Error('El mensaje cambió. Revísalo antes de volver a enviar.');reserveCorrection(localStorage,localDate());
  }catch(err){$('#assistant-progress').textContent=err.message;return;}
- invalidateAssistant();assistantBusy=true;assistantAbort=new AbortController();$('#assistant-prepare').disabled=true;$('#assistant-progress').textContent='Preparando una propuesta… Todavía no se cambiará ninguna ficha.';
+ invalidateAssistant();assistantBusy=true;const controller=new AbortController();assistantAbort=controller;$('#assistant-prepare').disabled=true;$('#assistant-new').disabled=true;$('#assistant-context').disabled=true;$('#assistant-input').readOnly=true;$('#assistant-talk').disabled=true;renderAssistantChat(instruction);$('#assistant-progress').textContent='Carterita está respondiendo… Todavía no se cambiará ninguna ficha.';
  try{
-  const raw=await requestAssistantPlan({key,prompt,signal:assistantAbort.signal});const plan=parseAssistantPlan(raw,context);if(assistantAbort.signal.aborted||$('#assistant-input').value!==instruction)return;
-  assistantPlan=plan;assistantContext=context;assistantBaseline=baseline;$('#assistant-response').textContent=[plan.summary,...plan.questions.map(q=>'• '+q)].filter(Boolean).join('\n');$('#assistant-response-block').hidden=false;$('#assistant-review').hidden=!plan.items.length;$('#assistant-progress').textContent=plan.items.length?'Propuesta lista. Revisa a quién corresponde cada acción antes de guardar.':'Completa los datos que faltan en la petición de arriba y vuelve a preparar.';assistantVoice.speakIfEnabled();
- }catch(err){$('#assistant-progress').textContent=err.message;}finally{assistantBusy=false;assistantAbort=null;$('#assistant-prepare').disabled=false;}
+  const raw=await requestAssistantPlan({key,prompt,signal:controller.signal});const plan=parseAssistantPlan(raw,context);if(controller.signal.aborted||$('#assistant-input').value!==instruction||readOnly)return;
+  const reply=[plan.summary,...plan.questions.map(q=>'• '+q)].filter(Boolean).join('\n');assistantMessages.push({role:'user',content:instruction},{role:'assistant',content:reply||'Puedes revisar las acciones propuestas.'});$('#assistant-input').value='';renderAssistantChat();
+  assistantPlan=plan;assistantContext=context;assistantBaseline=baseline;$('#assistant-response').textContent=reply;$('#assistant-response-block').hidden=false;$('#assistant-review').hidden=!plan.items.length;$('#assistant-ready-hint').hidden=!plan.items.length;$('#assistant-progress').textContent=plan.items.length?'Propuesta lista para revisar. También puedes pedirme cambios por el chat.':'Responde aquí abajo; conservaré lo que ya me contaste.';commit(clients);assistantVoice.speakIfEnabled();
+ }catch(err){renderAssistantChat();$('#assistant-progress').textContent=err.message;}finally{assistantBusy=false;assistantAbort=null;$('#assistant-prepare').disabled=false;$('#assistant-new').disabled=false;$('#assistant-input').readOnly=false;$('#assistant-talk').disabled=!(window.SpeechRecognition||window.webkitSpeechRecognition);updateAssistantContext();}
 };
 $('#assistant-dialog').addEventListener('close',()=>{assistantAbort?.abort();});
 $('#assistant-review').onclick=()=>{
@@ -407,5 +421,5 @@ function setPackageMode(assistant){
  $('#save-package').textContent=assistant?'Confirmar y guardar acciones':'Guardar fichas revisadas';
  $('#package-review-form h3').textContent=assistant?'Acciones propuestas':'3. Revisar y guardar';
 }
-function invalidateAssistant(){assistantPlan=null;$('#assistant-review').hidden=true;$('#assistant-response-block').hidden=true;assistantAbort?.abort();}
-$('#assistant-input').addEventListener('input',invalidateAssistant);$('#assistant-context').addEventListener('change',invalidateAssistant);
+function invalidateAssistant(){assistantPlan=null;$('#assistant-ready-hint').hidden=true;$('#assistant-review').hidden=true;$('#assistant-response-block').hidden=true;assistantAbort?.abort();}
+$('#assistant-input').addEventListener('input',invalidateAssistant);$('#assistant-context').addEventListener('change',()=>{invalidateAssistant();assistantChatContextId=$('#assistant-context').checked?current()?.id||assistantChatContextId:null;});

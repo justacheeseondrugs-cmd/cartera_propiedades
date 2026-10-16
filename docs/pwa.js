@@ -1,4 +1,4 @@
-const CACHE='cartera-shell-v19';
+const CACHE='cartera-shell-v20';
 const status=document.querySelector('#pwa-state'),installButton=document.querySelector('#install-app'),updateButton=document.querySelector('#update-app');
 let installPrompt=null,registration=null,ready=false,updateRequested=false,reloading=false;
 const alreadyControlled=Boolean(navigator.serviceWorker?.controller);
