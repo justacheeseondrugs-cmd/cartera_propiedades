@@ -1,3 +1,5 @@
+import {calendarRoute} from './calendar.mjs';
+export {CalendarAuth} from './calendar.mjs';
 import {transcribe} from './transcribe.mjs';
 export {VoiceUsage} from './transcribe.mjs';
 import {buildPushPayload} from '@block65/webcrypto-web-push';
@@ -21,12 +23,12 @@ export function validateJobs(jobs,now=Date.now()){
 async function bodyOf(request){const text=await request.text();if(text.length>200000)fail('Solicitud demasiado grande.',413);try{return JSON.parse(text);}catch{fail('Solicitud inválida.');}}
 export default {
  async fetch(request,env){
-  const origin=request.headers.get('Origin'),url=new URL(request.url);const cors={'Access-Control-Allow-Origin':env.APP_ORIGIN,'Access-Control-Allow-Methods':'GET,POST,PUT,DELETE,OPTIONS','Access-Control-Allow-Headers':'Authorization,Content-Type','Vary':'Origin','Cache-Control':'no-store','Access-Control-Expose-Headers':'X-Transcription-Remaining'};
+  const origin=request.headers.get('Origin'),url=new URL(request.url);const cors={'Access-Control-Allow-Origin':env.APP_ORIGIN,'Access-Control-Allow-Methods':'GET,POST,PUT,DELETE,OPTIONS','Access-Control-Allow-Headers':'Authorization,Content-Type,X-Carterita-Device,X-Requested-With','Vary':'Origin','Cache-Control':'no-store','Access-Control-Expose-Headers':'X-Transcription-Remaining'};
   if(origin!==env.APP_ORIGIN)return json({error:'Origen no permitido.'},403);
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
   let response;
   try{
-   if(url.pathname==='/transcribe'){response=await transcribe(request,env);}else {
+   if(url.pathname.startsWith('/calendar/')){response=await calendarRoute(request,env);}else if(url.pathname==='/transcribe'){response=await transcribe(request,env);}else {
    if(!env.PAIRING_CODE||env.PAIRING_CODE.length<24)fail('Falta configurar PAIRING_CODE (mínimo 24 caracteres) en el servicio.',503);
    if(!['/config','/devices'].includes(url.pathname)&&!/^\/devices\/[a-zA-Z0-9_-]{20,100}(?:\/(?:jobs|test))?$/.test(url.pathname))fail('Ruta no encontrada.',404);
    const stub=env.REMINDERS.get(env.REMINDERS.idFromName('carterita-single-owner'));response=await stub.fetch(request);
@@ -51,6 +53,7 @@ export class ReminderService {
    const id=b64(crypto.getRandomValues(new Uint8Array(24))),deviceToken=b64(crypto.getRandomValues(new Uint8Array(32)));devices.push({id,tokenHash:await sha(deviceToken),subscription,jobs:[],sent:[],revision:0,lastSeen:Date.now(),lastTest:0});await this.writeDevices(devices);await this.rearm(devices);return json({deviceId:id,deviceToken},201);
   }
   const parts=url.pathname.split('/'),device=devices.find(d=>d.id===parts[2]);if(!device||await sha(token)!==device.tokenHash)fail('La conexión del dispositivo ya no está activa. Vuelve a activarla.',401);
+  if(parts[3]==='calendar-auth'&&request.method==='GET')return json({ok:true});
   if(parts.length===3&&request.method==='DELETE'){devices=devices.filter(d=>d!==device);await this.writeDevices(devices);await this.rearm(devices);return json({ok:true});}
   if(parts[3]==='jobs'&&request.method==='PUT'){
    const body=await bodyOf(request);if(!Number.isSafeInteger(body.revision)||body.revision<=device.revision)fail('La lista cambió en otra petición. Vuelve a sincronizar.',409);

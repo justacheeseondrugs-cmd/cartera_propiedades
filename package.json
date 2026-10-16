@@ -1,11 +1,11 @@
 {
   "name": "cartera",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test test/core.test.mjs test/offline.test.mjs test/ai.test.mjs test/attachments.test.mjs test/privacy.test.mjs test/device-lock.test.mjs test/bootstrap.test.mjs test/push.test.mjs test/assistant.test.mjs test/voice-input.test.mjs test/calendar.test.mjs"
+    "test": "node --test test/core.test.mjs test/offline.test.mjs test/ai.test.mjs test/attachments.test.mjs test/privacy.test.mjs test/device-lock.test.mjs test/bootstrap.test.mjs test/push.test.mjs test/assistant.test.mjs test/voice-input.test.mjs test/calendar.test.mjs test/calendar-auth.test.mjs"
   },
   "engines": {
     "node": ">=22"

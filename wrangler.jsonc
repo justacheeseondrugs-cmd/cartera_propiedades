@@ -20,6 +20,10 @@
       {
         "name": "VOICE_USAGE",
         "class_name": "VoiceUsage"
+      },
+      {
+        "name": "CALENDAR_AUTH",
+        "class_name": "CalendarAuth"
       }
     ]
   },
@@ -34,6 +38,12 @@
       "tag": "v2",
       "new_sqlite_classes": [
         "VoiceUsage"
+      ]
+    },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": [
+        "CalendarAuth"
       ]
     }
   ],

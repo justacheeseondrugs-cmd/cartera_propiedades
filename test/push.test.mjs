@@ -57,3 +57,10 @@ test('additional calendar events create independent push jobs for the same clien
  const c={id:'primary',status:'Nuevo',followup:'2026-10-21',followupTime:'10:00',calendarEvents:[{id:'evt_visit',title:'Visita',date:'2026-10-22',time:'11:00',doneAt:''},{id:'evt_done',title:'Firma',date:'2026-10-23',time:'12:00',doneAt:'2026-10-20T12:00:00Z'}]};
  const result=buildPushJobs([c],+new Date('2026-10-20T00:00:00'));assert.deepEqual(result.jobs.map(j=>j.id),['primary','evt_visit']);
 });
+test('persistent calendar route checks origin and existing device before accessing credentials',async()=>{
+ const {env,request}=await service();let reached=0;env.CALENDAR_AUTH={idFromName:x=>x,get:()=>({fetch:async()=>{reached++;return Response.json({account:{sub:'test'}});}})};
+ const registered=await(await request('/devices',undefined,'POST',{subscription:await fixture()})).json();
+ const call=(origin,token)=>worker.fetch(new Request('https://test.workers.dev/calendar/session',{headers:{Origin:origin,Authorization:'Bearer '+token,'X-Carterita-Device':registered.deviceId}}),env);
+ assert.equal((await call('https://untrusted.test',registered.deviceToken)).status,403);assert.equal((await call(env.APP_ORIGIN,'wrong')).status,401);assert.equal(reached,0);assert.equal((await call(env.APP_ORIGIN,registered.deviceToken)).status,200);assert.equal(reached,1);
+ assert.equal((await request('/devices/'+registered.deviceId+'/calendar-auth',registered.deviceToken)).status,404);
+});

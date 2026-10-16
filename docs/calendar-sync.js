@@ -1,5 +1,6 @@
 // Calendar configuration is device-local; access tokens never enter storage or backups.
 const KEY='carterita-calendar-v1',SOURCE='carterita-v1';
+const SERVICE='https://carterita-avisos.justacheeseondrugs.workers.dev';
 const SCOPES='openid email https://www.googleapis.com/auth/calendar.app.created';
 export function calendarEntries(clients){return clients.flatMap(c=>[
  ...(c.followup?[{...c,clientId:c.id}]:[]),
@@ -31,12 +32,12 @@ export async function syncCalendar({clients,calendarId,request,details=true,sour
  return {count:desired.size,changed};
 }
 export function initCalendar({getClients,canSync,openClient,saveEvent,removeEvent,completeEvent}){
- const $=s=>document.querySelector(s),dialog=$('#calendar-dialog');let month=new Date(),day='',token=null,expires=0,account=null,busy=false,timer,dirty=false,epoch=0,sdkPromise;
- let config={clientId:'',accounts:{},details:true};try{const saved=JSON.parse(localStorage.getItem(KEY)||'null');if(saved&&typeof saved==='object')config={...config,...saved,accounts:saved.accounts||{}};}catch{}
+ const $=s=>document.querySelector(s),dialog=$('#calendar-dialog');let month=new Date(),day='',token=null,expires=0,account=null,sessionPending=null,busy=false,timer,dirty=false,epoch=0,sdkPromise;
+ let config={clientId:'',accounts:{},details:true,persistent:false};try{const saved=JSON.parse(localStorage.getItem(KEY)||'null');if(saved&&typeof saved==='object')config={...config,...saved,accounts:saved.accounts||{}};}catch{}
  const status=message=>{$('#calendar-state').textContent=message;};
  function save(){localStorage.setItem(KEY,JSON.stringify(config));}
  function unlocked(){return !document.hidden&&!document.documentElement.classList.contains('device-locked')&&canSync();}
- function controls(){const active=Boolean(token&&Date.now()<expires&&account);$('#calendar-connect').disabled=busy;$('#calendar-create').hidden=!active||Boolean(config.accounts[account?.sub]?.calendarId);$('#calendar-sync').disabled=busy||!active||!config.accounts[account?.sub]?.calendarId;$('#calendar-disconnect').hidden=!active;$('#calendar-disconnect').disabled=busy;$('#calendar-client-id').disabled=busy;$('#calendar-details').disabled=busy;}
+ function controls(){const active=Boolean(token&&Date.now()<expires&&account);$('#calendar-connect').disabled=busy;$('#calendar-create').hidden=!active||Boolean(config.accounts[account?.sub]?.calendarId);$('#calendar-sync').disabled=busy||!active||!config.accounts[account?.sub]?.calendarId;$('#calendar-disconnect').hidden=!active&&!config.persistent;$('#calendar-disconnect').disabled=busy;$('#calendar-client-id').disabled=busy;$('#calendar-details').disabled=busy;$('#calendar-persistent').disabled=busy;}
  function render(){
   $('#calendar-new-event').disabled=!canSync();
   const entries=calendarEntries(getClients()),year=month.getFullYear(),m=month.getMonth(),grid=$('#calendar-grid');grid.replaceChildren();
@@ -51,8 +52,30 @@ export function initCalendar({getClients,canSync,openClient,saveEvent,removeEven
    if(c.eventId){const actions=document.createElement('div');actions.className='compose-actions';for(const [label,act] of [['Editar',()=>editEvent(c)],['Marcar como hecho',()=>{if(completeEvent(c.clientId,c.eventId))queue();}],['Eliminar',()=>{if(confirm('¿Eliminar este evento?')&&removeEvent(c.clientId,c.eventId))queue();}]]){const button=document.createElement('button');button.type='button';button.className='quiet';button.textContent=label;button.onclick=act;button.disabled=!canSync();actions.append(button);}list.append(actions);}}
   $('#calendar-missing-time').textContent=entries.filter(c=>!eventBody(c)).length+' pendiente(s) sin fecha y hora válidas: se ven aquí, pero no se envían a Google.';controls();
  }
+ async function service(path,method='GET',body){
+  let device;try{device=JSON.parse(localStorage.getItem('carterita-push-v1')||'null');}catch{}
+  if(!device?.deviceId||!device?.deviceToken)throw Error('Primero activa los avisos de este teléfono para identificarlo. Después vuelve a conectar Google.');
+  const response=await fetch(SERVICE+path,{method,headers:{Authorization:'Bearer '+device.deviceToken,'X-Carterita-Device':device.deviceId,'X-Requested-With':'XmlHttpRequest',...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(25000)});
+  const data=await response.json();if(!response.ok)throw Error(data.error||'No se pudo conectar el calendario con Cloudflare.');return data;
+ }
+ function acceptSession(data){
+  if(data.clientId!==config.clientId)throw Error('El identificador de Google en Cloudflare no coincide con el guardado aquí. Revisa GOOGLE_CLIENT_ID.');
+  if(!data.accessToken||!data.account?.sub)throw Error('Cloudflare no confirmó la cuenta.');
+  token=data.accessToken;expires=Date.now()+Math.max(0,Number(data.expiresIn)-60)*1000;account=data.account;controls();
+ }
+ async function renew(){
+  if(!config.persistent||!unlocked())return;
+  if(!sessionPending)sessionPending=service('/calendar/session').then(acceptSession).finally(()=>{sessionPending=null;});
+  return sessionPending;
+ }
+ async function restore(){
+  if(busy||!config.persistent||!unlocked())return;busy=true;controls();let restored=false;
+  try{await renew();status('Conexión persistente recuperada. Cuenta: '+account.email);dirty=true;restored=true;}catch(error){status(error.message);}finally{busy=false;controls();}
+  if(restored)await synchronize();
+ }
  async function request(path,method='GET',body){
   if(!unlocked())throw Error('Desbloquea Carterita y vuelve a sincronizar.');
+  if(config.persistent&&(!token||Date.now()>=expires))await renew();
   if(!token||Date.now()>=expires)throw Error('La autorización venció. Toca «Conectar Google» otra vez.');
   const response=await fetch('https://www.googleapis.com/calendar/v3'+path,{method,headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(20000)});
   if(response.status===401){token=null;throw Error('La autorización venció. Toca «Conectar Google» otra vez.');}
@@ -61,7 +84,9 @@ export function initCalendar({getClients,canSync,openClient,saveEvent,removeEven
   return response.status===204?{}:response.json();
  }
  async function synchronize(){
-  if(busy||!token||!account||!unlocked())return;
+  if(busy||!unlocked())return;
+  if(config.persistent&&(!token||Date.now()>=expires)){try{await renew();}catch(e){status(e.message);return;}}
+  if(busy||!token||!account)return;
   const stored=config.accounts[account.sub];if(!stored?.calendarId)return;
   const run=epoch;busy=true;dirty=false;controls();status('Sincronizando con Google…');
   try{const result=await syncCalendar({clients:structuredClone(getClients()),calendarId:stored.calendarId,request,details:config.details});if(run!==epoch)return;stored.lastSync=new Date().toISOString();save();status(`${result.count} pendiente(s) sincronizados · ${new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})}. Cuenta: ${account.email}`);}
@@ -92,6 +117,8 @@ export function initCalendar({getClients,canSync,openClient,saveEvent,removeEven
  $('#calendar-prev').onclick=()=>{month=new Date(month.getFullYear(),month.getMonth()-1,1);day='';render();};
  $('#calendar-next').onclick=()=>{month=new Date(month.getFullYear(),month.getMonth()+1,1);day='';render();};
  $('#calendar-today').onclick=()=>{month=new Date();day=[month.getFullYear(),String(month.getMonth()+1).padStart(2,'0'),String(month.getDate()).padStart(2,'0')].join('-');render();};
+ $('#calendar-persistent').checked=config.persistent;
+ $('#calendar-persistent').onchange=()=>{config.persistent=$('#calendar-persistent').checked;token=null;account=null;epoch++;try{save();status(config.persistent?'Conexión persistente seleccionada. Configura Cloudflare según la guía y toca «Conectar Google».':'Modo por sesión seleccionado. Toca «Conectar Google».');}catch{status('No se pudo guardar la configuración.');}controls();};
  $('#calendar-client-id').value=config.clientId;$('#calendar-details').checked=config.details;
  $('#calendar-details').onchange=()=>{config.details=$('#calendar-details').checked;try{save();queue();}catch{status('No se pudo guardar la configuración.');}};
  $('#calendar-connect').onclick=async()=>{
@@ -100,6 +127,12 @@ export function initCalendar({getClients,canSync,openClient,saveEvent,removeEven
   if(config.clientId!==id){token=null;account=null;epoch++;config.accounts={};config.clientId=id;try{save();}catch{status('No se pudo guardar la configuración.');return;}}
   if(!window.google?.accounts?.oauth2){status('Preparando Google…');try{await loadSDK();status('Google está listo. Toca «Conectar Google» para elegir la cuenta.');}catch(e){status(e.message);}return;}
   busy=true;controls();
+  if(config.persistent){
+   try{window.google.accounts.oauth2.initCodeClient({client_id:id,scope:SCOPES,ux_mode:'popup',select_account:true,callback:async result=>{
+    if(!result.code){busy=false;controls();status('No se autorizó Google.');return;}
+    try{acceptSession(await service('/calendar/authorize','POST',{code:result.code}));save();status('Conexión persistente lista. Cuenta: '+account.email+'. Toca «Sincronizar ahora».');}catch(error){token=null;account=null;status(error.message);}finally{busy=false;controls();}
+   },error_callback:()=>{busy=false;controls();status('No se abrió la autorización. Vuelve a intentarlo.');}}).requestCode();}catch{busy=false;controls();status('No pude abrir Google. Vuelve a intentarlo.');}return;
+  }
   try{window.google.accounts.oauth2.initTokenClient({client_id:id,scope:SCOPES,callback:async response=>{
    if(response.error){busy=false;controls();status('No se autorizó la conexión con Google.');return;}
    token=response.access_token;expires=Date.now()+Math.max(0,Number(response.expires_in||0)-60)*1000;epoch++;busy=true;controls();
@@ -113,9 +146,9 @@ export function initCalendar({getClients,canSync,openClient,saveEvent,removeEven
   catch(e){status(e.message);}finally{busy=false;controls();}
  };
  $('#calendar-sync').onclick=synchronize;
- $('#calendar-disconnect').onclick=()=>{epoch++;token=null;account=null;clearTimeout(timer);status('Desconectada. Los eventos ya enviados se conservan en Google.');controls();};
- window.addEventListener('online',()=>{if(dirty&&token)synchronize();});
- window.addEventListener('carterita-unlocked',()=>{if(dirty&&token)synchronize();});
- document.addEventListener('visibilitychange',()=>{if(!document.hidden&&dirty&&token)synchronize();});
- status('El calendario funciona sin internet. Google aún no está conectado en esta sesión.');render();return {queue,render};
+ $('#calendar-disconnect').onclick=async()=>{if(busy)return;busy=true;controls();try{if(config.persistent)await service('/calendar/disconnect','DELETE');epoch++;token=null;account=null;config.persistent=false;$('#calendar-persistent').checked=false;save();clearTimeout(timer);status('Desconectada. Se eliminó el permiso guardado en Cloudflare; los eventos siguen en Google. Puedes revocar también el acceso desde tu cuenta de Google.');}catch(e){status(e.message);}finally{busy=false;controls();}};
+ window.addEventListener('online',()=>{if(config.persistent)restore();else if(dirty&&token)synchronize();});
+ window.addEventListener('carterita-unlocked',()=>{if(config.persistent)restore();else if(dirty&&token)synchronize();});
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden){if(config.persistent)restore();else if(dirty&&token)synchronize();}});
+ status('El calendario funciona sin internet. Google aún no está conectado en esta sesión.');render();setTimeout(restore,0);return {queue,render};
 }
