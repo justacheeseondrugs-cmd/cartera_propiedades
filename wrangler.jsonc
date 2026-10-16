@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "carterita-avisos",
+  "main": "push-service/worker.mjs",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "APP_ORIGIN": "https://justacheeseondrugs-cmd.github.io",
+    "APP_URL": "https://justacheeseondrugs-cmd.github.io/cartera_propiedades/"
+  },
+  "durable_objects": {"bindings": [{"name": "REMINDERS", "class_name": "ReminderService"}]},
+  "migrations": [{"tag": "v1", "new_sqlite_classes": ["ReminderService"]}],
+  "observability": {"enabled": false}
+}

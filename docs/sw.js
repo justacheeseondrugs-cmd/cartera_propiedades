@@ -1,5 +1,5 @@
-const CACHE='cartera-shell-v15';
-const ASSETS=['./','./index.html','./style.css','./app.js','./bootstrap.js','./privacy.js','./device-lock.js','./pwa.js','./core.js','./ai.js','./attachments.js','./icon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
+const CACHE='cartera-shell-v16';
+const ASSETS=['./','./index.html','./style.css','./app.js','./push.js','./bootstrap.js','./privacy.js','./device-lock.js','./pwa.js','./core.js','./ai.js','./attachments.js','./icon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
 const SCOPE=new URL(self.registration.scope);
 self.addEventListener('install',event=>{
  // Keep an entire version together; never reuse stale HTTP-cache assets.
@@ -23,5 +23,25 @@ self.addEventListener('fetch',event=>{
   try{const response=await fetch(event.request,{signal:controller.signal});if(response.ok)return response;return new Response('No se pudo cargar Cartera. Vuelve a abrirla con internet.',{status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}});}
   catch{return new Response('Sin conexión. Visita Cartera con internet una vez para preparar el uso offline.',{status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}});}
   finally{clearTimeout(timer);}
+ })());
+});
+
+self.addEventListener('push',event=>{
+ let payload={};try{payload=event.data?.json()||{};}catch{}
+ const id=typeof payload.clientId==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(payload.clientId)?payload.clientId:'';
+ event.waitUntil(self.registration.showNotification('Carterita',{
+  body:payload.test===true?'Prueba de avisos: Carterita ya puede notificar en este dispositivo.':'Tienes un seguimiento pendiente en Carterita.',
+  icon:new URL('./icon-192.png',SCOPE).href,badge:new URL('./icon-192.png',SCOPE).href,
+  tag:payload.test===true?'carterita-test':'carterita-followup-'+id,
+  data:{clientId:id},renotify:false
+ }));
+});
+self.addEventListener('notificationclick',event=>{
+ event.notification.close();const id=event.notification.data?.clientId;
+ const valid=typeof id==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(id),url=new URL('./',SCOPE);if(valid)url.searchParams.set('followup',id);
+ event.waitUntil((async()=>{
+  const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});const current=windows.find(client=>{const u=new URL(client.url);return u.origin===SCOPE.origin&&u.pathname.startsWith(SCOPE.pathname);});
+  if(current){await current.focus();if(valid)current.postMessage({type:'OPEN_FOLLOWUP',clientId:id});return;}
+  await self.clients.openWindow(url.href);
  })());
 });

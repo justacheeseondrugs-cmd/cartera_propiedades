@@ -1,3 +1,4 @@
+import {initPush,queuePushSync,openPushSettings} from './push.js';
 import {encryptBackup,decryptBackup,isEncryptedBackup,validateBackupPassword,backupAgeLabel} from './privacy.js';
 import {lockSettings,deviceLockAvailable,enableDeviceLock,disableDeviceLock} from './device-lock.js';
 import {mountClientFiles,exportFiles,exportFilePackages,filesFromPackage,saveFiles,removeFiles,listFiles} from './attachments.js';
@@ -14,7 +15,7 @@ function toast(message){$('#toast').textContent=message;$('#toast').classList.ad
 function storageError(){ $('#storage-message').textContent='No se pudo guardar. Exporta un respaldo antes de cerrar; revisa el espacio o permisos del navegador.';toast('No se pudo guardar. No cierres la app sin exportar los datos.');}
 try{const raw=localStorage.getItem(KEY);if(raw){clients=parseBackup(raw);writingProfile=writingProfileFromBackup(raw)||cleanWritingProfile(INITIAL_WRITING_PROFILE);}}catch{readOnly=true;storageError();$('#storage-message').textContent='No se pudo leer el almacenamiento. Recupera un respaldo desde Respaldos; no reemplazaremos los datos existentes.';}
 function envelope(data,profile=writingProfile,session=captureSession(data)){return {session,app:'cartera',version:7,exportedAt:new Date().toISOString(),clients:data,writingProfile:profile};}
-function commit(data,recovery=false,profile=writingProfile,session){if(readOnly&&!recovery){toast('Recupera un respaldo o recarga antes de editar.');return false;}try{localStorage.setItem(KEY,JSON.stringify(envelope(data,profile,session)));clients=data;writingProfile=profile;return true;}catch{storageError();return false;}}
+function commit(data,recovery=false,profile=writingProfile,session){if(readOnly&&!recovery){toast('Recupera un respaldo o recarga antes de editar.');return false;}try{localStorage.setItem(KEY,JSON.stringify(envelope(data,profile,session)));clients=data;writingProfile=profile;queuePushSync();return true;}catch{storageError();return false;}}
 function current(){return clients.find(c=>c.id===selected);}
 function saveContext(){if(!selected||!$('#template'))return;contexts.set(selected,{original:$('#original').value,style:$('#template').value,tone:$('#tone').value,prompt:$('#prompt')?.value||'',extra:$('#revision-extra')?.value||'',adjustments:[...document.querySelectorAll('[data-adjustment]:checked')].map(el=>el.dataset.adjustment)});}
 function flushDraft(){clearTimeout(draftTimer);saveContext();const c=current(),field=$('#reply');if(!c||!field||c.draft===field.value)return true;const next=clients.map(r=>r.id===c.id?{...r,draft:field.value,updatedAt:new Date().toISOString()}:r);if(commit(next)){if($('#draft-state'))$('#draft-state').textContent='Borrador guardado en este dispositivo';if($('#wa-draft-preview'))$('#wa-draft-preview').textContent=field.value.trim()?'Se abrirá con el borrador guardado.':'Primero prepara un borrador en Mensaje.';return true;}return false;}
@@ -149,6 +150,7 @@ document.addEventListener('click',async e=>{
  if(b.id==='copy'){flushDraft();copyField('reply');}
  if(b.id==='generate-prompt'){const c=current();if(c)$('#prompt').value=preparePrompt(c,$('#original').value,$('#template').value,$('#tone').value,writingProfile);}
  if(b.id==='correct-in-app'){runCorrection();return;}
+ if(b.id==='push-open'){openPushSettings();return;}
  if(b.id==='privacy-open'){openPrivacy();return;}
  if(b.id==='request-persistence'){requestPersistence();return;}
  if(b.id==='enable-device-lock'){configureDeviceLock(true);return;}
@@ -347,3 +349,9 @@ async function configureDeviceLock(enable){
 }
 
 window.addEventListener('carterita-unlocked',()=>{if(aiProposal&&current()?.id===aiProposal.clientId&&$('#reply')?.value===aiProposal.original&&!$('#ai-review-dialog').open)$('#ai-review-dialog').showModal();});
+
+let pendingPushClient=new URL(location.href).searchParams.get('followup');
+function openPushClient(){if(!pendingPushClient||document.documentElement.classList.contains('device-locked'))return;const id=pendingPushClient;pendingPushClient=null;if(!clients.some(c=>c.id===id)){toast('El aviso corresponde a una ficha que no está en este dispositivo.');return;}if(!flushDraft())return;selected=id;detailPanel='summary';stat='all';businessArea='all';$('#search').value='';$('#filter-status').value='';$('#filter-intent').value='';document.querySelectorAll('[data-area]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.area==='all')));render();const url=new URL(location.href);url.searchParams.delete('followup');history.replaceState(null,'',url);}
+navigator.serviceWorker?.addEventListener('message',event=>{if(event.data?.type==='OPEN_FOLLOWUP'&&typeof event.data.clientId==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(event.data.clientId)){pendingPushClient=event.data.clientId;openPushClient();}});
+window.addEventListener('carterita-unlocked',openPushClient);
+initPush(()=>clients,toast);openPushClient();

@@ -5,3 +5,5 @@ node_modules/
 cartera-respaldo-*.json
 backups/
 .openai/
+.dev.vars*
+.wrangler/

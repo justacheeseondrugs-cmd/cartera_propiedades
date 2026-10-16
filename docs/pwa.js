@@ -1,4 +1,4 @@
-const CACHE='cartera-shell-v15';
+const CACHE='cartera-shell-v16';
 const status=document.querySelector('#pwa-state'),installButton=document.querySelector('#install-app'),updateButton=document.querySelector('#update-app');
 let installPrompt=null,registration=null,ready=false,updateRequested=false,reloading=false;
 const alreadyControlled=Boolean(navigator.serviceWorker?.controller);
@@ -6,7 +6,7 @@ function displayState(){
  if(!navigator.onLine)status.textContent=ready?'Sin conexión · puedes trabajar con tus fichas.':'Sin conexión · abre Cartera con internet para prepararla.';
  else status.textContent=ready?'Lista para usar sin conexión.':'Preparando el uso sin conexión…';
 }
-async function checkReady(){try{const cache=await caches.open(CACHE);const files=['./index.html','./app.js','./bootstrap.js','./privacy.js','./device-lock.js','./pwa.js','./core.js','./ai.js','./attachments.js','./style.css','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png'];const found=await Promise.all(files.map(path=>cache.match(new URL(path,location.href))));ready=Boolean(navigator.serviceWorker?.controller&&found.every(Boolean));}catch{ready=false;}displayState();}
+async function checkReady(){try{const cache=await caches.open(CACHE);const files=['./index.html','./app.js','./push.js','./bootstrap.js','./privacy.js','./device-lock.js','./pwa.js','./core.js','./ai.js','./attachments.js','./style.css','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png'];const found=await Promise.all(files.map(path=>cache.match(new URL(path,location.href))));ready=Boolean(navigator.serviceWorker?.controller&&found.every(Boolean));}catch{ready=false;}displayState();}
 function checkUpdate(){updateButton.hidden=!registration?.waiting;}
 function hideIfInstalled(){const installed=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;installButton.hidden=installed;}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&navigator.onLine){checkUpdate();registration?.update().catch(()=>{});}});
