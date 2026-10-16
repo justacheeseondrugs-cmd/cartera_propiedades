@@ -1,6 +1,6 @@
 # Cartera · Consultas de propiedades
 
-PWA para organizar consultas inmobiliarias, preparar respuestas y llevar seguimientos. Sin API key y sin acceso automático a WhatsApp.
+PWA para organizar consultas inmobiliarias, preparar respuestas y llevar seguimientos. Las funciones locales no necesitan API key; las funciones opcionales de IA usan OpenAI. Sin acceso automático a WhatsApp.
 
 ## Abrir la aplicación
 https://justacheeseondrugs-cmd.github.io/cartera_propiedades/
@@ -167,3 +167,14 @@ Enviar prueba muestra progreso inmediato y un resultado separado del estado de s
 
 ### Recordatorios en la ficha
 Cada cliente muestra el recordatorio bajo Recordarme/Cambiar recordatorio y un estado en su tarjeta. El formulario mantiene fecha/hora y usa Guardar recordatorio como acción principal; las exportaciones al calendario están en un desplegable opcional. Ya no dice que guardar en Carterita no notifica. El estado Programado solo aparece cuando existe una confirmación de sincronización para ese código y horario. Cambiarlo muestra pendiente hasta confirmar; completar la tarea muestra retirada pendiente si el servidor todavía conserva un aviso futuro. El estado se actualiza sin reconstruir la ficha ni perder borradores. La sección Notificaciones del teléfono queda para vincular, probar o desactivar el dispositivo, no para el trabajo diario.
+
+
+## Versión 0.14: Asistente por texto y voz
+
+El botón fijo «Asistente · hablar o escribir» abre una petición libre. Puede proponer crear o actualizar fichas, modificar el checklist de documentos, programar el próximo seguimiento, marcarlo como hecho y redactar un borrador. Primero se revisa el texto exacto que saldrá del dispositivo; después se revisan y corrigen las acciones. Solo «Confirmar y guardar acciones» modifica los clientes. Los mensajes no se envían automáticamente a WhatsApp.
+
+Necesita una clave de OpenAI configurada en ese navegador para preparar propuestas. Comparte con las correcciones el límite local de 20 peticiones diarias, sin reintentos automáticos. No es un límite de gasto de la cuenta. El contexto opcional comparte solo un resumen de la ficha abierta, no toda la cartera ni archivos. Los datos introducidos expresamente en la petición sí forman parte del envío. Las fichas modificadas después de preparar una propuesta bloquean su aplicación para evitar sobrescribir cambios.
+
+El dictado usa la capacidad del navegador, que puede depender de servicios en línea; no se guardan grabaciones en Carterita. Si no está disponible, se puede usar el micrófono del teclado o escribir. La lectura opcional usa síntesis de voz del navegador: permite probar y elegir las voces disponibles y ajustar la velocidad. Estas preferencias se guardan solo en el dispositivo. Se detiene al cerrar el diálogo o esconder la aplicación. No requiere una petición adicional a OpenAI. La disponibilidad y el sonido deben verificarse en cada teléfono.
+
+Las propuestas aún sin confirmar y el texto de la petición permanecen solo en la página abierta; no se incluyen en los respaldos. Una vez confirmados, los clientes, documentos de checklist y borradores se guardan y respaldan con el flujo habitual.

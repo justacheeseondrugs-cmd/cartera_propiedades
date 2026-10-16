@@ -1,3 +1,4 @@
+import {ASSISTANT_SYSTEM,assistantPrompt,parseAssistantPlan,applyAssistantPlan,requestAssistantPlan,setupAssistantVoice} from './assistant.js';
 import {initPush,queuePushSync,openPushSettings,getClientReminderState} from './push.js';
 import {encryptBackup,decryptBackup,isEncryptedBackup,validateBackupPassword,backupAgeLabel} from './privacy.js';
 import {lockSettings,deviceLockAvailable,enableDeviceLock,disableDeviceLock} from './device-lock.js';
@@ -7,7 +8,7 @@ import {cleanRecord,parseBackup,mergeRecords,missingFields,prepareReply,prepareP
 const $=s=>document.querySelector(s),KEY='cartera-v1';
 let clients=[],selected=null,stat='today',businessArea='all',incoming=null,draftTimer,toastTimer,formDocuments=[],readOnly=false,savedPrompt=null,formContext="general",detailPanel="summary";
 let aiBusy=false,aiProposal=null,incomingSession=null,incomingFiles=[];
-const contexts=new Map();let writingProfile=cleanWritingProfile(INITIAL_WRITING_PROFILE),writingExamples=[],incomingProfile=null;let packageEntries=[];
+const contexts=new Map();let writingProfile=cleanWritingProfile(INITIAL_WRITING_PROFILE),writingExamples=[],incomingProfile=null;let packageEntries=[];let packageAssistant=false,assistantBaseline={},assistantPlan=null,assistantContext=null,assistantBusy=false,assistantAbort=null;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dateLabel=d=>d?new Date(d+'T12:00:00').toLocaleDateString('es-CL',{day:'numeric',month:'short',year:'numeric'}):'Sin fecha';
 const awaiting=c=>c.businessArea==='Leasing'&&c.status!=='Cerrado'&&['Solicitada','En curso','Esperando respuesta'].includes(c.simulationStatus);
@@ -152,6 +153,8 @@ document.addEventListener('click',async e=>{
  if(b.id==='copy'){flushDraft();copyField('reply');}
  if(b.id==='generate-prompt'){const c=current();if(c)$('#prompt').value=preparePrompt(c,$('#original').value,$('#template').value,$('#tone').value,writingProfile);}
  if(b.id==='correct-in-app'){runCorrection();return;}
+ if(b.id==='assistant-open'){openAssistant();return;}
+ if(b.id==='assistant-configure'){openAISettings();return;}
  if(b.id==='client-push-settings'){$('#reminder-dialog').close();openPushSettings();return;}
  if(b.id==='push-open'){openPushSettings();return;}
  if(b.id==='privacy-open'){openPrivacy();return;}
@@ -234,6 +237,7 @@ $('#import-preview').onclick=async e=>{
 };
 
 function openClientPackage(){
+ packageAssistant=false;setPackageMode(false);
  if(readOnly||!flushDraft())return;$('#package-reference').value=localDate();$('#package-instructions').value=clientPackagePrompt(localDate());$('#package-dialog').showModal();
 }
 $('#package-reference').onchange=()=>{try{$('#package-instructions').value=clientPackagePrompt($('#package-reference').value);$('#package-error').textContent='';}catch(err){$('#package-error').textContent=err.message;}};
@@ -241,7 +245,7 @@ function packageOptions(values,value){return values.map(s=>`<option value="${esc
 const packageLabels={name:'Nombre o alias',phone:'WhatsApp',email:'Correo',businessArea:'Área de trabajo',source:'Origen',intent:'Qué busca',area:'Comuna',kind:'Tipo de propiedad',budget:'Presupuesto / precio',property:'Propiedad o código',status:'Estado del caso',nextAction:'Próximo paso',followup:'Fecha exacta de contacto',followupTime:'Hora',notes:'Notas y datos por confirmar',lastMessage:'Último mensaje recibido',simulationStatus:'Estado de la simulación',simulationRequestedOn:'Fecha de solicitud',simulationEntity:'Entidad',simulationNotes:'Notas de la simulación'};
 const packageEnums={businessArea:AREAS,source:SOURCES,intent:INTENTS,kind:KINDS,status:STATUSES,simulationStatus:SIMULATION_STATUSES};
 function packageField(key,data,index){const value=data[key]||'';const attrs=`data-package-field="${key}" data-package-index="${index}"`;let control;if(packageEnums[key])control=`<select ${attrs}>${packageOptions(packageEnums[key],value)}</select>`;else if(['notes','simulationNotes','lastMessage'].includes(key))control=`<textarea ${attrs} rows="3" maxlength="${key==='simulationNotes'?3000:5000}">${esc(value)}</textarea>`;else control=`<input ${attrs} value="${esc(value)}" type="${key==='followup'||key==='simulationRequestedOn'?'date':key==='followupTime'?'time':key==='email'?'email':'text'}" maxlength="${{name:100,phone:30,email:180,area:120,budget:100,property:180,nextAction:500,simulationEntity:150}[key]||500}" ${key==='name'?'required':''}>`;return `<label>${packageLabels[key]}${control}</label>`;}
-function packageMatches(index){const entry=packageEntries[index];return clientMatches(entry.data,clients);}
+function packageMatches(index){const entry=packageEntries[index],matches=clientMatches(entry.data,clients),target=clients.find(c=>c.id===entry.assistantTargetId);if(target&&!matches.some(m=>m.id===target.id))matches.push({id:target.id,name:target.name,reasons:['ficha elegida']});return matches;}
 function packageDecisionHtml(index){const entry=packageEntries[index],matches=packageMatches(index);return `<option value="review" ${entry.choice==='review'?'selected':''}>Revisar coincidencia antes de continuar</option><option value="new" ${entry.choice==='new'?'selected':''}>Crear cliente nuevo</option>${matches.map(m=>`<option value="${esc(m.id)}" ${entry.choice===m.id?'selected':''}>Actualizar ${esc(m.name)} (${esc(m.reasons.join(', '))})</option>`).join('')}<option value="skip" ${entry.choice==='skip'?'selected':''}>No cargar esta entrada</option>`;}
 function updatePackageDecision(index){const entry=packageEntries[index],row=$(`[data-package-row="${index}"]`),matches=packageMatches(index),select=row.querySelector('[data-package-choice]');
  if(matches.length&&entry.choice==='new')entry.choice='review';if(!['new','review','skip'].includes(entry.choice)&&!matches.some(m=>m.id===entry.choice))entry.choice=matches.length?'review':'new';
@@ -253,7 +257,7 @@ function showPackageChanges(index){const entry=packageEntries[index],row=$(`[dat
 }
 function updatePackageSummary(){const counts={new:0,skip:0,review:0,update:0};for(const e of packageEntries)counts[['new','skip','review'].includes(e.choice)?e.choice:'update']++;$('#package-summary').textContent=`${counts.new} nuevos · ${counts.update} actualizaciones · ${counts.skip} omitidos${counts.review?' · '+counts.review+' por revisar':''}`;$('#save-package').disabled=readOnly||Boolean(counts.review)||counts.new+counts.update===0;}
 function renderPackagePreview(){
- $('#package-review-form').hidden=!packageEntries.length;$('#package-preview').innerHTML=packageEntries.map((entry,index)=>`<article class="package-card" data-package-row="${index}"><h3>${index+1}. <span class="package-name">${esc(entry.data.name)}</span></h3><p class="package-match-note small"></p><label>Qué hacer con esta entrada<select data-package-choice="${index}">${packageDecisionHtml(index)}</select></label>${entry.warnings.length?`<p class="missing">La IA dejó por confirmar: ${esc(entry.warnings.join(' · '))}</p>`:''}<p class="small"><strong>Próximo paso:</strong> <span class="package-next">${esc(entry.data.nextAction||'Por definir')}</span></p><details class="form-group"><summary>Ver y corregir los datos</summary>${['name','phone','email','businessArea','source','intent','area','kind','budget','property','status','nextAction','followup','followupTime','lastMessage','notes'].map(k=>packageField(k,entry.data,index)).join('')}<details class="form-group"><summary>Simulación y documentos de Leasing</summary>${['simulationStatus','simulationRequestedOn','simulationEntity','simulationNotes'].map(k=>packageField(k,entry.data,index)).join('')}${entry.data.documents.map((doc,j)=>`<div class="package-document"><label>Documento<input data-package-index="${index}" data-package-doc="${j}" data-doc-key="name" value="${esc(doc.name)}" maxlength="160" required></label><label>Estado<select data-package-index="${index}" data-package-doc="${j}" data-doc-key="status">${packageOptions(DOCUMENT_STATUSES,doc.status)}</select></label><label>Observación<input data-package-index="${index}" data-package-doc="${j}" data-doc-key="notes" value="${esc(doc.notes)}" maxlength="500"></label></div>`).join('')}</details></details><details class="package-existing form-group" hidden></details></article>`).join('');
+ $('#package-review-form').hidden=!packageEntries.length;$('#package-preview').innerHTML=packageEntries.map((entry,index)=>`<article class="package-card" data-package-row="${index}"><h3>${index+1}. <span class="package-name">${esc(entry.data.name)}</span></h3><p class="package-match-note small"></p>${packageAssistant?`<p class="assistant-operation">${entry.choice==='new'?'Crear ficha nueva':'Revisar cliente de destino'}${entry.completeFollowup?' · Marcar seguimiento como hecho':''}</p>${entry.assistantDraft!==null&&entry.assistantDraft!==undefined?`<label>Mensaje propuesto (solo borrador)<textarea data-assistant-draft="${index}" rows="4" maxlength="4000">${esc(entry.assistantDraft)}</textarea></label>`:''}${entry.completeFollowup?`<label class="profile-import-choice"><input type="checkbox" data-assistant-done="${index}" checked> Marcar el seguimiento como hecho</label>`:''}`:''}<label>Qué hacer con esta entrada<select data-package-choice="${index}">${packageDecisionHtml(index)}</select></label>${entry.warnings.length?`<p class="missing">La IA dejó por confirmar: ${esc(entry.warnings.join(' · '))}</p>`:''}<p class="small"><strong>Próximo paso:</strong> <span class="package-next">${esc(entry.data.nextAction||'Por definir')}</span></p><details class="form-group"><summary>Ver y corregir los datos</summary>${['name','phone','email','businessArea','source','intent','area','kind','budget','property','status','nextAction','followup','followupTime','lastMessage','notes'].map(k=>packageField(k,entry.data,index)).join('')}<details class="form-group"><summary>Simulación y documentos de Leasing</summary>${['simulationStatus','simulationRequestedOn','simulationEntity','simulationNotes'].map(k=>packageField(k,entry.data,index)).join('')}${entry.data.documents.map((doc,j)=>`<div class="package-document"><label>Documento<input data-package-index="${index}" data-package-doc="${j}" data-doc-key="name" value="${esc(doc.name)}" maxlength="160" required></label><label>Estado<select data-package-index="${index}" data-package-doc="${j}" data-doc-key="status">${packageOptions(DOCUMENT_STATUSES,doc.status)}</select></label><label>Observación<input data-package-index="${index}" data-package-doc="${j}" data-doc-key="notes" value="${esc(doc.notes)}" maxlength="500"></label></div>`).join('')}</details></details><details class="package-existing form-group" hidden></details></article>`).join('');
  packageEntries.forEach((_,i)=>updatePackageDecision(i));$('#package-help').open=false;updatePackageSummary();
 }
 $('#preview-package').onclick=()=>{
@@ -262,21 +266,21 @@ $('#preview-package').onclick=()=>{
 };
 $('#package-text').addEventListener('input',()=>{if(packageEntries.length){packageEntries=[];$('#package-preview').replaceChildren();$('#package-review-form').hidden=true;$('#package-error').textContent='El paquete cambió. Pulsa Revisar antes de guardar otra vez.';}});
 $('#package-file').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{if(file.size>2*1024*1024)throw new Error('El paquete supera los 2 MB.');$('#package-text').value=await file.text();$('#preview-package').click();}catch(err){packageEntries=[];$('#package-review-form').hidden=true;$('#package-preview').replaceChildren();$('#package-error').textContent=err.message;}};
-function editPackageField(e){const el=e.target;if(el.dataset.packageIndex===undefined)return;const index=Number(el.dataset.packageIndex),entry=packageEntries[index];if(!entry)return;
+function editPackageField(e){const el=e.target;if(el.dataset.assistantDraft!==undefined){packageEntries[Number(el.dataset.assistantDraft)].assistantDraft=el.value;return;}if(el.dataset.packageIndex===undefined)return;const index=Number(el.dataset.packageIndex),entry=packageEntries[index];if(!entry)return;
  if(el.dataset.packageDoc!==undefined){entry.data.documents[Number(el.dataset.packageDoc)][el.dataset.docKey]=el.value;return;}
  const key=el.dataset.packageField;if(!key)return;entry.data[key]=el.value;if(!entry.providedFields.includes(key))entry.providedFields.push(key);
  const row=el.closest('[data-package-row]');if(key==='name')row.querySelector('.package-name').textContent=el.value;if(key==='nextAction')row.querySelector('.package-next').textContent=el.value||'Por definir';if(e.type==='change'&&['name','phone','email'].includes(key))updatePackageDecision(index);else showPackageChanges(index);
 }
-$('#package-preview').addEventListener('input',editPackageField);$('#package-preview').addEventListener('change',e=>{if(e.target.dataset.packageChoice!==undefined){const i=Number(e.target.dataset.packageChoice);packageEntries[i].choice=e.target.value;showPackageChanges(i);updatePackageSummary();}else editPackageField(e);});
+$('#package-preview').addEventListener('input',editPackageField);$('#package-preview').addEventListener('change',e=>{if(e.target.dataset.assistantDone!==undefined){packageEntries[Number(e.target.dataset.assistantDone)].completeFollowup=e.target.checked;return;}if(e.target.dataset.packageChoice!==undefined){const i=Number(e.target.dataset.packageChoice);packageEntries[i].choice=e.target.value;showPackageChanges(i);updatePackageSummary();}else editPackageField(e);});
 $('#package-review-form').addEventListener('invalid',e=>revealField(e.target),true);
 $('#package-review-form').onsubmit=e=>{
  e.preventDefault();if(readOnly||!flushDraft())return;
  try{
-  const decisions=packageEntries.map(entry=>({entry,choice:entry.choice}));const additions=decisions.filter(d=>d.choice==='new');
+  const decisions=packageEntries.map(entry=>({entry,choice:entry.choice,...(packageAssistant?{draft:entry.assistantDraft,completeFollowup:entry.completeFollowup}:{})}));const additions=decisions.filter(d=>d.choice==='new');
   const repeated=additions.filter((d,i)=>clientMatches(d.entry.data,clients).length||clientMatches(d.entry.data,additions.slice(0,i).map(x=>x.entry.data)).length);
   if(repeated.length&&!confirm('Hay '+repeated.length+' ficha(s) nuevas con posibles coincidencias. ¿Crear igualmente como clientes separados?'))return;
-  const next=applyClientPackage(clients,decisions);if(!commit(next))return;
-  packageEntries=[];$('#package-review-form').hidden=true;$('#package-preview').replaceChildren();$('#package-text').value='';$('#package-file').value='';$('#package-dialog').close();selected=null;stat='all';businessArea='all';$('#search').value='';$('#filter-status').value='';$('#filter-intent').value='';document.querySelectorAll('[data-area]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.area==='all')));render();toast('Fichas guardadas. Puedes abrirlas para confirmar lo que falta.');
+  const next=packageAssistant?applyAssistantPlan(clients,decisions,assistantBaseline):applyClientPackage(clients,decisions);if(!commit(next))return;
+  packageEntries=[];$('#package-review-form').hidden=true;$('#package-preview').replaceChildren();$('#package-text').value='';$('#package-file').value='';$('#package-dialog').close();selected=null;stat='all';businessArea='all';$('#search').value='';$('#filter-status').value='';$('#filter-intent').value='';document.querySelectorAll('[data-area]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.area==='all')));render();toast(packageAssistant?'Acciones guardadas. Los mensajes quedaron como borradores; revisa el estado de los recordatorios en las fichas.':'Fichas guardadas. Puedes abrirlas para confirmar lo que falta.');if(packageAssistant){assistantPlan=null;$('#assistant-review').hidden=true;$('#assistant-response').textContent='Acciones guardadas. Los mensajes no se enviaron a WhatsApp.';}packageAssistant=false;
  }catch(err){$('#package-error').textContent=err.message;$('#package-error').scrollIntoView({block:'nearest'});}
 };
 function saveSessionLocally(){if(!readOnly&&flushDraft())commit(clients);}
@@ -332,7 +336,7 @@ $('#backup-dialog').addEventListener('close',()=>{$('#backup-password').value=''
 function askBackupPassword(){if(document.documentElement.classList.contains('device-locked'))return Promise.reject(new Error('Desbloquea Carterita y vuelve a seleccionar el respaldo.'));return new Promise((resolve,reject)=>{backupPasswordRequest={resolve,reject};$('#decrypt-password').value='';$('#decrypt-dialog').showModal();$('#decrypt-password').focus();});}
 $('#decrypt-form').onsubmit=e=>{e.preventDefault();const request=backupPasswordRequest;backupPasswordRequest=null;const password=$('#decrypt-password').value;$('#decrypt-password').value='';$('#decrypt-dialog').close();request?.resolve(password);};
 $('#decrypt-dialog').addEventListener('close',()=>{const request=backupPasswordRequest;backupPasswordRequest=null;$('#decrypt-password').value='';request?.reject(new Error('Apertura del respaldo cancelada.'));});
-function confirmAISend(prompt){return new Promise(resolve=>{aiSendRequest={resolve};$('#ai-send-preview').value=prompt;$('#ai-send-system').textContent=AI_SYSTEM;$('#ai-send-dialog').showModal();});}
+function confirmAISend(prompt,system=AI_SYSTEM){return new Promise(resolve=>{aiSendRequest={resolve};$('#ai-send-preview').value=prompt;$('#ai-send-system').textContent=system;$('#ai-send-dialog').showModal();});}
 $('#ai-send-confirm').onclick=()=>{const request=aiSendRequest;aiSendRequest=null;$('#ai-send-dialog').close();request?.resolve(true);};
 $('#ai-send-dialog').addEventListener('close',()=>{const request=aiSendRequest;aiSendRequest=null;request?.resolve(false);});
 async function refreshPrivacy(){
@@ -365,3 +369,43 @@ function refreshClientReminderStates(){
 }
 window.addEventListener('carterita-reminder-state',refreshClientReminderStates);
 refreshClientReminderStates();
+
+const assistantVoice=setupAssistantVoice({input:$('#assistant-input'),button:$('#assistant-talk'),status:$('#assistant-voice-state'),readButton:$('#assistant-listen'),readEnabled:$('#assistant-read'),response:$('#assistant-response'),dialog:$('#assistant-dialog')});
+function openAssistant(){
+ if(readOnly||!flushDraft())return;invalidateAssistant();const c=current();$('#assistant-context').disabled=!c;$('#assistant-context').checked=Boolean(c);$('#assistant-context-label').textContent=c?'Usar datos resumidos de '+c.name:'Sin ficha abierta: puedes crear o mencionar un cliente';$('#assistant-dialog').showModal();
+}
+$('#assistant-prepare').onclick=async()=>{
+ if(assistantBusy||readOnly||aiSendRequest)return;assistantVoice.stop();let key,prompt,instruction,context,baseline;
+ try{
+  key=localStorage.getItem(AI_KEY);if(!key){openAISettings();return;}if(navigator.onLine===false)throw new Error('Necesitas conexión para preparar acciones con IA.');
+  instruction=$('#assistant-input').value;context=$('#assistant-context').checked?current():null;baseline=Object.fromEntries(clients.map(c=>[c.id,c.updatedAt]));
+  prompt=assistantPrompt(instruction,context,writingProfile,new Date(),{porContactarHoy:clients.filter(c=>dueToday(c)).length});
+  if(!await confirmAISend(prompt,ASSISTANT_SYSTEM))return;
+  if($('#assistant-input').value!==instruction||readOnly)throw new Error('La petición cambió. Revísala antes de volver a preparar.');
+  reserveCorrection(localStorage,localDate());
+ }catch(err){$('#assistant-progress').textContent=err.message;return;}
+ invalidateAssistant();assistantBusy=true;assistantAbort=new AbortController();$('#assistant-prepare').disabled=true;$('#assistant-progress').textContent='Preparando una propuesta… Todavía no se cambiará ninguna ficha.';
+ try{
+  const raw=await requestAssistantPlan({key,prompt,signal:assistantAbort.signal});const plan=parseAssistantPlan(raw,context);if(assistantAbort.signal.aborted||$('#assistant-input').value!==instruction)return;
+  assistantPlan=plan;assistantContext=context;assistantBaseline=baseline;$('#assistant-response').textContent=[plan.summary,...plan.questions.map(q=>'• '+q)].filter(Boolean).join('\n');$('#assistant-response-block').hidden=false;$('#assistant-review').hidden=!plan.items.length;$('#assistant-progress').textContent=plan.items.length?'Propuesta lista. Revisa a quién corresponde cada acción antes de guardar.':'Completa los datos que faltan en la petición de arriba y vuelve a preparar.';assistantVoice.speakIfEnabled();
+ }catch(err){$('#assistant-progress').textContent=err.message;}finally{assistantBusy=false;assistantAbort=null;$('#assistant-prepare').disabled=false;}
+};
+$('#assistant-dialog').addEventListener('close',()=>{assistantAbort?.abort();});
+$('#assistant-review').onclick=()=>{
+ if(!assistantPlan||readOnly||!flushDraft())return;
+ packageAssistant=true;packageEntries=assistantPlan.items.map(item=>{
+  const matches=clientMatches(item.entry.data,clients);let choice='review';if(item.mode==='selected'&&assistantContext)choice=assistantContext.id;else if(item.mode==='new'&&!matches.length)choice='new';else if(item.mode==='match'&&matches.length===1)choice=matches[0].id;
+  return {...item.entry,choice,assistantTargetId:item.mode==='selected'?assistantContext?.id:null,assistantDraft:item.draft,completeFollowup:item.completeFollowup};
+ });
+ $('#assistant-dialog').close();setPackageMode(true);$('#package-reference').value=localDate();$('#package-error').textContent='';renderPackagePreview();$('#package-dialog').showModal();
+};
+
+function setPackageMode(assistant){
+ $('#package-dialog h2').textContent=assistant?'Revisa las acciones del asistente':'Cargar información con ChatGPT';
+ $('#package-help').hidden=assistant;$('#package-dialog .package-input-section').hidden=assistant;
+ $('#package-dialog > p').textContent=assistant?'Revisa el cliente, los cambios y el borrador antes de confirmar.':'Cuéntale lo que sabes de tus clientes. ChatGPT lo ordena y tú revisas cada ficha antes de guardarla.';
+ $('#save-package').textContent=assistant?'Confirmar y guardar acciones':'Guardar fichas revisadas';
+ $('#package-review-form h3').textContent=assistant?'Acciones propuestas':'3. Revisar y guardar';
+}
+function invalidateAssistant(){assistantPlan=null;$('#assistant-review').hidden=true;$('#assistant-response-block').hidden=true;assistantAbort?.abort();}
+$('#assistant-input').addEventListener('input',invalidateAssistant);$('#assistant-context').addEventListener('change',invalidateAssistant);

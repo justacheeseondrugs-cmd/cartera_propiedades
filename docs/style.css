@@ -21,3 +21,7 @@
 .push-test-state{padding:14px;border:1px solid #92b4b0;background:#edf6f4;border-radius:10px;overflow-wrap:anywhere}
 
 .client-reminder-status{margin:14px 0;padding:14px;border:1px solid #aec8c1;border-radius:12px;background:#f7fbf9;color:#173e43}.client-reminder-status h3{font-size:1rem;margin:0 0 8px}.client-reminder-status p{margin:8px 0}.card-reminder{display:block;margin-top:8px;color:#48645c}[data-reminder-state][data-state="scheduled"]{color:#246144}[data-reminder-state][data-state="pending"],[data-reminder-state][data-state="missing"],[data-reminder-state][data-state="overdue"]{color:#785412}
+
+#assistant-dialog{max-width:720px}#assistant-response{white-space:pre-wrap}.assistant-operation{padding:10px;background:#edf6f4;border-radius:10px}.intro-actions #assistant-open{white-space:normal}#assistant-progress{overflow-wrap:anywhere}
+
+#assistant-open{position:fixed;bottom:calc(18px + env(safe-area-inset-bottom));right:18px;z-index:20;box-shadow:0 4px 18px #173e3e30;max-width:calc(100vw - 36px)}body{padding-bottom:90px}

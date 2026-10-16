@@ -7,7 +7,7 @@ export function reserveCorrection(storage,day){
  let usage;try{usage=JSON.parse(storage.getItem(AI_USAGE)||'null');}catch{throw new Error('No se pudo leer el contador de IA. Revisa el almacenamiento.');}
  const count=usage?.day===day?Number(usage.count):0;
  if(!Number.isInteger(count)||count<0)throw new Error('El contador de IA no es válido.');
- if(count>=DAILY_LIMIT)throw new Error('Llegaste al límite de 20 intentos de corrección de hoy. Puedes seguir editando a mano.');
+ if(count>=DAILY_LIMIT)throw new Error('Llegaste al límite de 20 peticiones de IA de hoy. Puedes seguir editando a mano.');
  storage.setItem(AI_USAGE,JSON.stringify({day,count:count+1}));return count+1;
 }
 export async function correctMessage({key,prompt,fetcher=fetch}){
