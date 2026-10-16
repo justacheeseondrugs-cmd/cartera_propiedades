@@ -4,7 +4,7 @@ const $=s=>document.querySelector(s);
 export function serviceURL(value){const url=new URL(value);if(url.protocol!=='https:'||!url.hostname.endsWith('.workers.dev')||url.username||url.password||url.port||!['','/'].includes(url.pathname)||url.search||url.hash)throw new Error('Pega la dirección HTTPS de tu Worker de Cloudflare, terminada en .workers.dev, sin rutas extra.');return url.origin;}
 export function buildPushJobs(clients,now=Date.now()){
  const jobs=[];let missingTime=0,outOfRange=0;
- for(const c of clients){if(c.status==='Cerrado'||c.followupDoneAt||!c.followup)continue;if(!c.followupTime){missingTime++;continue;}
+ for(const c of clients.flatMap(c=>[c,...(c.calendarEvents||[]).map(e=>({id:e.id,status:c.status,followup:e.date,followupTime:e.time,followupDoneAt:e.doneAt}))])){if(c.status==='Cerrado'||c.followupDoneAt||!c.followup)continue;if(!c.followupTime){missingTime++;continue;}
   if(!/^\d{4}-\d{2}-\d{2}$/.test(c.followup)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(c.followupTime)){outOfRange++;continue;}
   const date=new Date(c.followup+'T'+c.followupTime+':00'),at=+date;
   if(!Number.isFinite(at)||date.getHours()!==Number(c.followupTime.slice(0,2))||date.getMinutes()!==Number(c.followupTime.slice(3))){outOfRange++;continue;}

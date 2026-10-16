@@ -52,3 +52,8 @@ test('per-client reminder status requires server acknowledgement and distinguish
  const connection={disabled:false,lastSyncedJobs:[{id:c.id,at}]};assert.equal(reminderState(c,connection,now).kind,'scheduled');assert.equal(reminderState({...c,followupTime:'13:00'},connection,now).kind,'pending');assert.equal(reminderState({...c,followupDoneAt:'yes'},connection,now).kind,'pending');assert.equal(reminderState({...c,followupDoneAt:'yes'},{...connection,lastSyncedJobs:[]},now).kind,'done');
  assert.equal(reminderState({...c,followupTime:''},connection,now).kind,'missing');assert.equal(reminderState(c,connection,at+60000).kind,'overdue');assert.equal(reminderState({...c,followup:''},connection,now).kind,'pending');assert.equal(reminderState({...c,followup:''},null,now).kind,'none');
 });
+
+test('additional calendar events create independent push jobs for the same client',()=>{
+ const c={id:'primary',status:'Nuevo',followup:'2026-10-21',followupTime:'10:00',calendarEvents:[{id:'evt_visit',title:'Visita',date:'2026-10-22',time:'11:00',doneAt:''},{id:'evt_done',title:'Firma',date:'2026-10-23',time:'12:00',doneAt:'2026-10-20T12:00:00Z'}]};
+ const result=buildPushJobs([c],+new Date('2026-10-20T00:00:00'));assert.deepEqual(result.jobs.map(j=>j.id),['primary','evt_visit']);
+});

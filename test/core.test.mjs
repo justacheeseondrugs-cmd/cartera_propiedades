@@ -83,3 +83,8 @@ test('custom message objective survives session export and restore',()=>{
  const session=sessionFromBackup(JSON.stringify({app:'cartera',version:7,clients:[client()],session:{composers:[{id:client().id,style:'custom',customGoal:'Preguntar por la visita.'}]}}));
  assert.equal(session.composers[0].style,'custom');assert.equal(session.composers[0].customGoal,'Preguntar por la visita.');
 });
+test('multiple client events survive backup import and unrelated client edits',()=>{
+ const calendarEvents=[{id:'evt_first',title:'Visita',date:'2026-10-20',time:'10:00',doneAt:''},{id:'evt_second',title:'Firma',date:'2026-10-21',time:'15:00',doneAt:'2026-10-20T12:00:00Z'}];
+ const c=cleanRecord({...client(),calendarEvents});const [restored]=parseBackup(JSON.stringify({app:'cartera',version:7,clients:[c]}));assert.deepEqual(restored.calendarEvents,calendarEvents);assert.deepEqual(cleanRecord({...restored,notes:'Nueva nota'}).calendarEvents,calendarEvents);
+ assert.throws(()=>cleanRecord({...c,calendarEvents:[calendarEvents[0],calendarEvents[0]]}),/repetidos/);assert.throws(()=>cleanRecord({...c,calendarEvents:[{...calendarEvents[0],date:'2026-02-30'}]}),/fecha/);
+});

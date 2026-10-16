@@ -1,7 +1,10 @@
 // Calendar configuration is device-local; access tokens never enter storage or backups.
 const KEY='carterita-calendar-v1',SOURCE='carterita-v1';
 const SCOPES='openid email https://www.googleapis.com/auth/calendar.app.created';
-export function calendarEntries(clients){return clients.filter(c=>c.followup&&!c.followupDoneAt&&c.status!=='Cerrado').sort((a,b)=>(a.followup+' '+(a.followupTime||'')).localeCompare(b.followup+' '+(b.followupTime||''))||a.name.localeCompare(b.name));}
+export function calendarEntries(clients){return clients.flatMap(c=>[
+ ...(c.followup?[{...c,clientId:c.id}]:[]),
+ ...(c.calendarEvents||[]).map(e=>({id:e.id,clientId:c.id,eventId:e.id,name:c.name,status:c.status,nextAction:e.title,followup:e.date,followupTime:e.time,followupDoneAt:e.doneAt}))
+ ]).filter(c=>c.followup&&!c.followupDoneAt&&c.status!=='Cerrado').sort((a,b)=>(a.followup+' '+(a.followupTime||'')).localeCompare(b.followup+' '+(b.followupTime||''))||a.name.localeCompare(b.name));}
 export function eventBody(c,details=true){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(c.followup)||!/^\d{2}:\d{2}$/.test(c.followupTime||''))return null;
  const start=new Date(c.followup+'T'+c.followupTime+':00');
@@ -27,7 +30,7 @@ export async function syncCalendar({clients,calendarId,request,details=true,sour
  for(const [id,body] of desired)if(!seen.has(id)){await request(base,'POST',body);changed++;}
  return {count:desired.size,changed};
 }
-export function initCalendar({getClients,canSync,openClient}){
+export function initCalendar({getClients,canSync,openClient,saveEvent,removeEvent,completeEvent}){
  const $=s=>document.querySelector(s),dialog=$('#calendar-dialog');let month=new Date(),day='',token=null,expires=0,account=null,busy=false,timer,dirty=false,epoch=0,sdkPromise;
  let config={clientId:'',accounts:{},details:true};try{const saved=JSON.parse(localStorage.getItem(KEY)||'null');if(saved&&typeof saved==='object')config={...config,...saved,accounts:saved.accounts||{}};}catch{}
  const status=message=>{$('#calendar-state').textContent=message;};
@@ -35,6 +38,7 @@ export function initCalendar({getClients,canSync,openClient}){
  function unlocked(){return !document.hidden&&!document.documentElement.classList.contains('device-locked')&&canSync();}
  function controls(){const active=Boolean(token&&Date.now()<expires&&account);$('#calendar-connect').disabled=busy;$('#calendar-create').hidden=!active||Boolean(config.accounts[account?.sub]?.calendarId);$('#calendar-sync').disabled=busy||!active||!config.accounts[account?.sub]?.calendarId;$('#calendar-disconnect').hidden=!active;$('#calendar-disconnect').disabled=busy;$('#calendar-client-id').disabled=busy;$('#calendar-details').disabled=busy;}
  function render(){
+  $('#calendar-new-event').disabled=!canSync();
   const entries=calendarEntries(getClients()),year=month.getFullYear(),m=month.getMonth(),grid=$('#calendar-grid');grid.replaceChildren();
   $('#calendar-month').textContent=month.toLocaleDateString('es-CL',{month:'long',year:'numeric'});
   const first=(new Date(year,m,1).getDay()+6)%7,last=new Date(year,m+1,0).getDate();
@@ -43,7 +47,8 @@ export function initCalendar({getClients,canSync,openClient}){
   $('#calendar-day-title').textContent=day?'Pendientes del '+new Date(day+'T12:00:00').toLocaleDateString('es-CL'):'Pendientes del mes';
   const list=$('#calendar-agenda');list.replaceChildren();const visible=entries.filter(c=>day?c.followup===day:c.followup.startsWith(`${year}-${String(m+1).padStart(2,'0')}`));
   if(!visible.length)list.textContent='No tienes pendientes para estas fechas.';
-  for(const c of visible){const b=document.createElement('button');b.type='button';b.className='quiet calendar-agenda-item';const title=document.createElement('strong'),info=document.createElement('span');title.textContent=c.name;info.textContent=`${c.followup} · ${c.followupTime||'Sin hora'} — ${c.nextAction||'Revisar ficha'}`;b.append(title,info);b.onclick=()=>{dialog.close();openClient(c.id);};list.append(b);}
+  for(const c of visible){const b=document.createElement('button');b.type='button';b.className='quiet calendar-agenda-item';const title=document.createElement('strong'),info=document.createElement('span');title.textContent=c.name;info.textContent=`${c.followup} · ${c.followupTime||'Sin hora'} — ${c.nextAction||'Revisar ficha'}`;b.append(title,info);b.onclick=()=>{dialog.close();openClient(c.clientId||c.id);};list.append(b);
+   if(c.eventId){const actions=document.createElement('div');actions.className='compose-actions';for(const [label,act] of [['Editar',()=>editEvent(c)],['Marcar como hecho',()=>{if(completeEvent(c.clientId,c.eventId))queue();}],['Eliminar',()=>{if(confirm('¿Eliminar este evento?')&&removeEvent(c.clientId,c.eventId))queue();}]]){const button=document.createElement('button');button.type='button';button.className='quiet';button.textContent=label;button.onclick=act;button.disabled=!canSync();actions.append(button);}list.append(actions);}}
   $('#calendar-missing-time').textContent=entries.filter(c=>!eventBody(c)).length+' pendiente(s) sin fecha y hora válidas: se ven aquí, pero no se envían a Google.';controls();
  }
  async function request(path,method='GET',body){
@@ -66,6 +71,23 @@ export function initCalendar({getClients,canSync,openClient}){
  let lastQueued='';
  function queue(){const signature=JSON.stringify([config.details,Intl.DateTimeFormat().resolvedOptions().timeZone,calendarEntries(getClients()).map(c=>[c.id,c.name,c.nextAction,c.followup,c.followupTime])]);if(signature===lastQueued)return;lastQueued=signature;dirty=true;if(dialog.open)render();clearTimeout(timer);timer=setTimeout(()=>{if(!busy)synchronize();},1200);}
  function loadSDK(){if(window.google?.accounts?.oauth2)return Promise.resolve();if(sdkPromise)return sdkPromise;sdkPromise=new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;const timeout=setTimeout(()=>{s.remove();sdkPromise=null;reject(Error('Google no respondió. Vuelve a intentarlo.'));},15000);s.onload=()=>{clearTimeout(timeout);resolve();};s.onerror=()=>{clearTimeout(timeout);sdkPromise=null;s.remove();reject(Error('No se pudo conectar con Google. Revisa internet.'));};document.head.append(s);});return sdkPromise;}
+ function editEvent(entry=null){
+  if(!canSync())return;
+  const form=$('#calendar-event-form');form.reset();$('#calendar-event-error').textContent='';form.elements.eventId.value=entry?.eventId||'';
+  const select=form.elements.clientId;select.replaceChildren();
+  for(const c of getClients().filter(c=>c.status!=='Cerrado')){const option=document.createElement('option');option.value=c.id;option.textContent=c.name;select.append(option);}
+  if(!select.options.length){$('#calendar-local-state').textContent='Añade primero un cliente abierto para asociar el evento.';return;}
+  if(entry)select.value=entry.clientId;select.disabled=Boolean(entry);
+  form.elements.title.value=entry?.nextAction||'';form.elements.date.value=entry?.followup||day||[new Date().getFullYear(),String(new Date().getMonth()+1).padStart(2,'0'),String(new Date().getDate()).padStart(2,'0')].join('-');form.elements.time.value=entry?.followupTime||'';
+  $('#calendar-event-title').textContent=entry?'Editar evento':'Crear evento';$('#calendar-event-dialog').showModal();
+ }
+ $('#calendar-new-event').onclick=()=>editEvent();
+ $('#calendar-event-form').onsubmit=e=>{e.preventDefault();const form=e.currentTarget;
+  if(!form.reportValidity())return;
+  const entry={id:form.elements.eventId.value||'evt_'+crypto.randomUUID(),title:form.elements.title.value.trim(),date:form.elements.date.value,time:form.elements.time.value,doneAt:''};
+  if(!eventBody({followup:entry.date,followupTime:entry.time,name:'',id:entry.id})){$('#calendar-event-error').textContent='Revisa la fecha y hora: no existen en la zona horaria del teléfono.';return;}
+  if(saveEvent(form.elements.clientId.value,entry)){form.closest('dialog').close();month=new Date(entry.date+'T12:00:00');day=entry.date;queue();render();}
+ };
  $('#calendar-open').onclick=()=>{render();dialog.showModal();};
  $('#calendar-prev').onclick=()=>{month=new Date(month.getFullYear(),month.getMonth()-1,1);day='';render();};
  $('#calendar-next').onclick=()=>{month=new Date(month.getFullYear(),month.getMonth()+1,1);day='';render();};

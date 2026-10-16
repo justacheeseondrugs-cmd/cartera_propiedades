@@ -366,7 +366,7 @@ async function configureDeviceLock(enable){
 window.addEventListener('carterita-unlocked',()=>{if(aiProposal&&current()?.id===aiProposal.clientId&&$('#reply')?.value===aiProposal.original&&!$('#ai-review-dialog').open)$('#ai-review-dialog').showModal();});
 
 let pendingPushClient=new URL(location.href).searchParams.get('followup');
-function openPushClient(){if(!pendingPushClient||document.documentElement.classList.contains('device-locked'))return;const id=pendingPushClient;pendingPushClient=null;if(!clients.some(c=>c.id===id)){toast('El aviso corresponde a una ficha que no está en este dispositivo.');return;}if(!flushDraft())return;selected=id;detailPanel='summary';stat='all';businessArea='all';$('#search').value='';$('#filter-status').value='';$('#filter-intent').value='';document.querySelectorAll('[data-area]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.area==='all')));render();const url=new URL(location.href);url.searchParams.delete('followup');history.replaceState(null,'',url);}
+function openPushClient(){if(!pendingPushClient||document.documentElement.classList.contains('device-locked'))return;let id=pendingPushClient;pendingPushClient=null;id=clients.find(c=>c.calendarEvents?.some(e=>e.id===id))?.id||id;if(!clients.some(c=>c.id===id)){toast('El aviso corresponde a una ficha que no está en este dispositivo.');return;}if(!flushDraft())return;selected=id;detailPanel='summary';stat='all';businessArea='all';$('#search').value='';$('#filter-status').value='';$('#filter-intent').value='';document.querySelectorAll('[data-area]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.area==='all')));render();const url=new URL(location.href);url.searchParams.delete('followup');history.replaceState(null,'',url);}
 navigator.serviceWorker?.addEventListener('message',event=>{if(event.data?.type==='OPEN_FOLLOWUP'&&typeof event.data.clientId==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(event.data.clientId)){pendingPushClient=event.data.clientId;openPushClient();}});
 window.addEventListener('carterita-unlocked',openPushClient);
 initPush(()=>clients,toast);openPushClient();
@@ -445,4 +445,11 @@ $('#assistant-input').addEventListener('input',invalidateAssistant);$('#assistan
 
 voiceInput=setupVoiceInput({input:$('#assistant-input'),button:$('#assistant-talk'),status:$('#assistant-voice-state'),dialog:$('#assistant-dialog'),phoneVoice:assistantVoice,onSend:()=>$('#assistant-chat-form').onsubmit({preventDefault(){},voiceTurn:true}),getNames:()=>[...(current()?[current().name]:[]),...clients.map(c=>c.name)],onStop:()=>assistantAbort?.abort()});
 
-calendarView=initCalendar({getClients:()=>clients,canSync:()=>!readOnly,openClient:id=>{if(!flushDraft())return;selected=id;detailPanel='summary';render();}});
+calendarView=initCalendar({getClients:()=>clients,canSync:()=>!readOnly,openClient:id=>{if(!flushDraft())return;selected=id;detailPanel='summary';render();},
+ saveEvent:(id,event)=>updateCalendarEvents(id,events=>events.some(e=>e.id===event.id)?events.map(e=>e.id===event.id?event:e):[...events,event]),
+ removeEvent:(id,eventId)=>updateCalendarEvents(id,events=>events.filter(e=>e.id!==eventId)),
+ completeEvent:(id,eventId)=>updateCalendarEvents(id,events=>events.map(e=>e.id===eventId?{...e,doneAt:new Date().toISOString()}:e))});
+function updateCalendarEvents(id,change){
+ const client=clients.find(c=>c.id===id);if(!client||readOnly)return false;
+ try{const updated=cleanRecord({...client,calendarEvents:change(client.calendarEvents||[]),updatedAt:new Date().toISOString()});if(!commit(clients.map(c=>c.id===id?updated:c)))return false;render();toast('Evento guardado.');return true;}catch(error){$('#calendar-event-error').textContent=error.message;toast(error.message);return false;}
+}

@@ -14,13 +14,17 @@ export function cleanRecord(value){
  if(r.lastMessageAt&&!Number.isFinite(Date.parse(r.lastMessageAt)))throw new Error('La fecha del último mensaje no es válida.');
  if(r.followupTime&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(r.followupTime))throw new Error('La hora del seguimiento no es válida.');
  if(r.followupDoneAt&&!Number.isFinite(Date.parse(r.followupDoneAt)))throw new Error('La fecha de finalización no es válida.');
+ const events=value.calendarEvents??[];
+ if(!Array.isArray(events)||events.length>200)throw new Error('Puedes guardar hasta 200 eventos por cliente.');
+ r.calendarEvents=events.map(e=>{if(!e||typeof e.id!=='string'||!/^evt_[a-zA-Z0-9_-]{1,90}$/.test(e.id)||typeof e.title!=='string'||!e.title.trim()||e.title.length>500||typeof e.date!=='string'||!e.date||!validDate(e.date)||typeof e.time!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(e.time)||typeof(e.doneAt??'')!=='string'||(e.doneAt&&!Number.isFinite(Date.parse(e.doneAt))))throw new Error('Revisa el título, fecha y hora de cada evento.');return {id:e.id,title:e.title.trim(),date:e.date,time:e.time,doneAt:e.doneAt||''};});
+ if(new Set(r.calendarEvents.map(e=>e.id)).size!==r.calendarEvents.length)throw new Error('Hay eventos repetidos.');
  const docs=value.documents??[];if(!Array.isArray(docs)||docs.length>100)throw new Error('La lista de documentos no es válida (máximo 100).');
  r.documents=docs.map(d=>{if(!d||typeof d.id!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(d.id)||typeof d.name!=='string'||!d.name.trim()||d.name.length>160||!DOCUMENT_STATUSES.includes(d.status)||typeof(d.notes??'')!=='string'||(d.notes??'').length>500)throw new Error('Revisa el nombre y estado de cada documento.');return {id:d.id,name:d.name.trim(),status:d.status,notes:d.notes??''};});
  if(new Set(r.documents.map(d=>d.id)).size!==r.documents.length)throw new Error('Hay documentos con identificadores repetidos.');return r;
 }
 export function parseBackup(text){
  const b=JSON.parse(text);if(b.app!=='cartera'||![1,2,3,4,5,6,7].includes(b.version)||!Array.isArray(b.clients)||b.clients.length>3000)throw new Error('No es un respaldo compatible de Cartera.');
- const clients=b.clients.map(cleanRecord);if(new Set(clients.map(c=>c.id)).size!==clients.length)throw new Error('El respaldo contiene identificadores repetidos.');return clients;
+ const clients=b.clients.map(cleanRecord);if(new Set(clients.map(c=>c.id)).size!==clients.length)throw new Error('El respaldo contiene identificadores repetidos.');const calendarIds=clients.flatMap(c=>[c.id,...c.calendarEvents.map(e=>e.id)]);if(new Set(calendarIds).size!==calendarIds.length)throw new Error('El respaldo contiene eventos con identificadores repetidos.');return clients;
 }
 export function mergeRecords(current,incoming){const map=new Map(current.map(c=>[c.id,c]));for(const c of incoming){const old=map.get(c.id);if(!old||Date.parse(c.updatedAt)>Date.parse(old.updatedAt))map.set(c.id,c);}return [...map.values()];}
 export function missingFields(c){return [['area','comuna'],['kind','tipo de propiedad'],['budget',c.intent==='Ofrecer propiedad'?'precio esperado':'presupuesto']].filter(([key])=>!c[key].trim()).map(([,label])=>label);}

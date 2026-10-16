@@ -28,3 +28,10 @@ test('sync follows pagination and reconciles duplicate owned events without touc
 test('failed writes surface the error, without retrying or deleting following events',async()=>{
  const calls=[];await assert.rejects(syncCalendar({clients:[client],calendarId:'id',request:async(path,method='GET')=>{calls.push(method);if(method==='GET')return {items:[]};throw Error('offline');}}),/offline/);assert.deepEqual(calls,['GET','POST']);
 });
+test('multiple events for one client retain separate Google events when one is changed or completed',async()=>{
+ const a={id:'evt_a',title:'Visita',date:'2026-10-21',time:'11:00',doneAt:''},b={id:'evt_b',title:'Firmar',date:'2026-10-22',time:'12:00',doneAt:''};
+ const c={...client,calendarEvents:[a,b]};assert.equal(calendarEntries([c]).length,3);
+ const events=new Map();let sequence=0;const request=async(path,method='GET',body)=>{if(method==='GET')return {items:[...events.values()]};if(method==='POST'){const item={...body,id:'g'+(++sequence)};events.set(item.id,item);return item;}const id=path.split('/').at(-1);if(method==='PATCH'){events.set(id,{...body,id});return events.get(id);}if(method==='DELETE')events.delete(id);return {};};
+ await syncCalendar({clients:[c],calendarId:'id',request});assert.equal(events.size,3);
+ await syncCalendar({clients:[{...c,calendarEvents:[{...a,time:'15:00'},{...b,doneAt:'2026-10-20T12:00:00Z'}]}],calendarId:'id',request});assert.equal(events.size,2);assert.equal(sequence,3);assert.ok([...events.values()].some(e=>e.summary.includes('Visita')));assert.ok(![...events.values()].some(e=>e.summary.includes('Firmar')));
+});
