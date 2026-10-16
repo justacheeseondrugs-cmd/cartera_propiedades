@@ -71,3 +71,15 @@ test('legacy backups still load and invalid sessions never introduce missing cli
  const session=sessionFromBackup(JSON.stringify({app:'cartera',version:6,clients:[c],session:{selected:'unknown',panel:'bad',composers:[{id:'unknown'}],proposal:{clientId:'unknown',original:'x',text:'y'}}}));assert.equal(session.selected,null);assert.equal(session.panel,'summary');assert.deepEqual(session.composers,[]);assert.equal(session.proposal,null);
  assert.throws(()=>sessionFromBackup(JSON.stringify({app:'cartera',version:6,clients:[c],session:{composers:'bad'}})),/Sesión/);
 });
+
+test('custom message purpose is included without requiring a preset or changing local templates',()=>{
+ const goal='Agradecer la visita de ayer y preguntar qué le pareció.';
+ const prompt=preparePrompt(client(),'','custom','warm',{},goal);
+ assert.match(prompt,/Agradecer la visita de ayer/);assert.match(prompt,/aunque no sea una respuesta/);assert.match(prompt,/No inventes precios/);
+ assert.throws(()=>preparePrompt(client(),'','custom','warm',{},''),/qué quieres decir/);
+ assert.throws(()=>prepareReply(client(),'','custom'),/Redactar con IA/);
+});
+test('custom message objective survives session export and restore',()=>{
+ const session=sessionFromBackup(JSON.stringify({app:'cartera',version:7,clients:[client()],session:{composers:[{id:client().id,style:'custom',customGoal:'Preguntar por la visita.'}]}}));
+ assert.equal(session.composers[0].style,'custom');assert.equal(session.composers[0].customGoal,'Preguntar por la visita.');
+});

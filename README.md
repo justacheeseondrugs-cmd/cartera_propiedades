@@ -189,3 +189,10 @@ Crear una ficha requiere un nombre o alias, pero no exige teléfono, presupuesto
 El chat y el mensaje sin enviar se guardan en la sesión local y en los paquetes de respaldo. Al recargar se recupera la conversación; las propuestas sin confirmar deben prepararse de nuevo antes de guardarlas. «Nueva conversación» borra el chat actual sin borrar clientes. El chat se limita a 32 mensajes y 16.000 caracteres; se pide comenzar otro antes de superar el límite, sin descartar silenciosamente el contexto antiguo. No se copian claves API al historial ni al respaldo.
 
 Cada envío incluye el historial de ese chat y el contexto de ficha seleccionado, visibles en la confirmación previa. No hay llamadas de IA al dictar, escuchar, recuperar la sesión o abrir la revisión. Cada mensaje enviado comparte el límite existente de 20 peticiones diarias.
+
+
+## Versión 0.16: Mensajes sobre cualquier tema
+
+En la ficha, abre «Mensaje» y elige «Personalizado · otro tema» en «¿Qué quieres decirle?». Aparece un campo libre para indicar el propósito y los datos confirmados, sin depender de las plantillas. «Redactar con IA» prepara un mensaje nuevo usando el perfil de escritura, con vista previa del envío y revisión de la propuesta antes de sustituir el borrador. Comparte el límite de 20 peticiones diarias. Si falta una clave, abre la configuración; una indicación vacía no hace peticiones.
+
+«Preparar para ChatGPT» crea instrucciones copiables sin llamar a la API. El objetivo personalizado se conserva por cliente en la sesión y en los paquetes. Las plantillas existentes siguen funcionando sin IA y la indicación no cambia el perfil general de escritura.
