@@ -50,7 +50,7 @@ export class ReminderService {
   if(parts.length===3&&request.method==='DELETE'){devices=devices.filter(d=>d!==device);await this.writeDevices(devices);await this.rearm(devices);return json({ok:true});}
   if(parts[3]==='jobs'&&request.method==='PUT'){
    const body=await bodyOf(request);if(!Number.isSafeInteger(body.revision)||body.revision<=device.revision)fail('La lista cambió en otra petición. Vuelve a sincronizar.',409);
-   const previous=new Map(device.jobs.map(j=>[j.id+':'+j.at,j]));const jobs=validateJobs(body.jobs).map(j=>previous.get(j.id+':'+j.at)||j);device.jobs=jobs.filter(j=>!device.sent.includes(j.id+':'+j.at));device.revision=body.revision;device.lastSeen=Date.now();await this.writeDevices(devices);await this.rearm(devices);return json({ok:true,count:device.jobs.length,revision:device.revision});
+   const previous=new Map(device.jobs.map(j=>[j.id+':'+j.at,j]));const jobs=validateJobs(body.jobs).map(j=>previous.get(j.id+':'+j.at)||j);device.jobs=jobs.filter(j=>!device.sent.includes(j.id+':'+j.at));device.revision=body.revision;device.lastSeen=Date.now();await this.writeDevices(devices);await this.rearm(devices);return json({ok:true,count:device.jobs.length,scheduled:device.jobs.map(({id,at})=>({id,at})),revision:device.revision});
   }
   if(parts[3]==='test'&&request.method==='POST'){
    if(Date.now()-device.lastTest<60000)fail('Espera un minuto entre pruebas.',429);device.lastTest=Date.now();device.lastSeen=Date.now();await this.writeDevices(devices);const status=await this.deliver(device,{test:true});if(status!==201&&status!==200&&status!==202)fail('El proveedor no aceptó la prueba. Comprueba los permisos del teléfono.',502);return json({ok:true});

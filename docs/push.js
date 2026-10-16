@@ -21,7 +21,22 @@ async function api(url,path,token,method='GET',body){
  catch(err){if(err.name==='AbortError')throw new Error('El servicio tardó demasiado. No se confirmó la actualización de los avisos.');if(err instanceof TypeError)throw new Error('No se pudo conectar. Los cambios de los avisos siguen pendientes de enviar.');throw err;}finally{clearTimeout(timeout);}
 }
 function testStatus(text){const el=$('#push-test-state');if(el){el.hidden=false;el.textContent=text;}}
-function setStatus(text){const el=$('#push-state');if(el)el.textContent=text;const hint=$('#push-sync-state');if(hint){hint.hidden=!saved;hint.textContent=text;}}
+export function reminderState(c,connection,now=Date.now()){
+ const acknowledged=Array.isArray(connection?.lastSyncedJobs)?connection.lastSyncedJobs.filter(j=>j&&typeof j.id==='string'&&Number.isFinite(j.at)):[],previous=acknowledged.some(j=>j.id===c.id&&j.at>now);
+ if(c.followupDoneAt||c.status==='Cerrado')return previous&&!connection?.disabled?{kind:'pending',label:'Hecho · falta sincronizar la retirada del aviso.'}:{kind:'done',label:'Seguimiento hecho.'};
+ if(!c.followup&&previous&&!connection?.disabled)return {kind:'pending',label:'Recordatorio quitado · falta sincronizar la retirada del aviso.'};
+ if(!c.followup)return {kind:'none',label:'Sin recordatorio. Pulsa Recordarme para elegir fecha y hora.'};
+ if(!c.followupTime)return {kind:'missing',label:'Por hacer · falta elegir la hora del aviso.'};
+ let result;try{result=buildPushJobs([c],now);}catch{return {kind:'missing',label:'Revisa la fecha y la hora del recordatorio.'};}
+ const at=+new Date(c.followup+'T'+c.followupTime+':00');
+ if(result.outOfRange||!Number.isFinite(at))return {kind:'missing',label:'Revisa la fecha y la hora (hasta un año por adelantado).'};
+ if(at<=now)return {kind:'overdue',label:'Por hacer · la fecha y hora del recordatorio ya pasaron.'};
+ if(!connection||connection.disabled)return {kind:'inactive',label:'Recordatorio guardado · activa los avisos de este teléfono para recibirlo.'};
+ if(acknowledged.some(j=>j.id===c.id&&j.at===at))return {kind:'scheduled',label:'Aviso programado en este teléfono.'};
+ return {kind:'pending',label:'Guardado · falta sincronizar el aviso'+(typeof navigator!=='undefined'&&navigator.onLine===false?' al recuperar conexión.':'.')};
+}
+export function getClientReminderState(c){return reminderState(c,saved);}
+function setStatus(text){window.dispatchEvent(new Event('carterita-reminder-state'));const el=$('#push-state');if(el)el.textContent=text;const hint=$('#push-sync-state');if(hint){hint.hidden=!saved;hint.textContent=text;}}
 async function registration(){if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window))throw new Error('Este navegador no ofrece notificaciones push. En iPhone instala la PWA; en HONOR prueba Chrome actualizado.');return navigator.serviceWorker.ready;}
 function decodeKey(value){return Uint8Array.from(atob(value.replaceAll('-','+').replaceAll('_','/')),c=>c.charCodeAt(0));}
 export function queuePushSync(){if(!saved||saved.disabled)return;dirty=true;clearTimeout(timer);timer=setTimeout(syncPush,500);setStatus('Avisos: cambios pendientes de enviar al servicio.');}
@@ -29,8 +44,8 @@ export async function syncPush(){
  if(syncing||!saved||saved.disabled)return;syncing=true;
  try{do{dirty=false;if(navigator.onLine===false)throw new Error('Sin conexión: cambios de avisos pendientes. Un aviso ya programado aún podría llegar.');
   const config=saved,{jobs,missingTime,outOfRange}=buildPushJobs(readClients());const revision=Math.max(Date.now(),Number(config.revision||0)+1);store({...config,revision});
-  await api(config.url,'/devices/'+config.deviceId+'/jobs',config.deviceToken,'PUT',{revision,jobs});
-  if(saved?.deviceId===config.deviceId){store({...saved,lastSync:new Date().toISOString(),count:jobs.length});setStatus('Avisos sincronizados: '+jobs.length+' próximo(s).'+(missingTime?' '+missingTime+' sin hora: añade una hora para recibir push.':'')+(outOfRange?' Hay fechas no válidas o a más de un año.':''));}
+  const result=await api(config.url,'/devices/'+config.deviceId+'/jobs',config.deviceToken,'PUT',{revision,jobs});
+  if(saved?.deviceId===config.deviceId){store({...saved,lastSync:new Date().toISOString(),count:result?.count??jobs.length,lastSyncedJobs:result?.scheduled||jobs});setStatus('Avisos sincronizados: '+jobs.length+' próximo(s).'+(missingTime?' '+missingTime+' sin hora: añade una hora para recibir push.':'')+(outOfRange?' Hay fechas no válidas o a más de un año.':''));}
  }while(dirty&&saved&&!saved.disabled);
  }catch(err){dirty=true;if(err.status===401&&saved){store({...saved,disabled:true});refresh();}setStatus(err.message);}finally{syncing=false;}
 }

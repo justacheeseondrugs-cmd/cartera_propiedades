@@ -44,3 +44,11 @@ test('browser schedules only future pending cases with an explicit valid local t
  const c={id:'case-1',status:'Nuevo',followup:date,followupTime:'12:00',followupDoneAt:'',name:'Never uploaded',phone:'+56123456789'};
  const result=buildPushJobs([c,{...c,id:'done',followupDoneAt:'yes'},{...c,id:'closed',status:'Cerrado'},{...c,id:'missing',followupTime:''}],now);assert.equal(result.jobs.length,1);assert.equal(result.missingTime,1);assert.deepEqual(Object.keys(result.jobs[0]),['id','at']);assert.equal(serviceURL('https://carterita-avisos.example.workers.dev/'),'https://carterita-avisos.example.workers.dev');assert.throws(()=>serviceURL('https://evil.test'),/Cloudflare/);
 });
+
+import {reminderState} from '../docs/push.js';
+test('per-client reminder status requires server acknowledgement and distinguishes cancellation pending from completed',()=>{
+ const now=Date.now(),future=new Date(now+86400000),followup=[future.getFullYear(),String(future.getMonth()+1).padStart(2,'0'),String(future.getDate()).padStart(2,'0')].join('-'),c={id:'state-case',status:'Nuevo',followup,followupTime:'12:00',followupDoneAt:''};const at=+new Date(followup+'T12:00:00');
+ assert.equal(reminderState(c,null,now).kind,'inactive');assert.equal(reminderState(c,{disabled:false,lastSyncedJobs:[]},now).kind,'pending');
+ const connection={disabled:false,lastSyncedJobs:[{id:c.id,at}]};assert.equal(reminderState(c,connection,now).kind,'scheduled');assert.equal(reminderState({...c,followupTime:'13:00'},connection,now).kind,'pending');assert.equal(reminderState({...c,followupDoneAt:'yes'},connection,now).kind,'pending');assert.equal(reminderState({...c,followupDoneAt:'yes'},{...connection,lastSyncedJobs:[]},now).kind,'done');
+ assert.equal(reminderState({...c,followupTime:''},connection,now).kind,'missing');assert.equal(reminderState(c,connection,at+60000).kind,'overdue');assert.equal(reminderState({...c,followup:''},connection,now).kind,'pending');assert.equal(reminderState({...c,followup:''},null,now).kind,'none');
+});
