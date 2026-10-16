@@ -203,3 +203,12 @@ En la ficha, abre «Mensaje» y elige «Personalizado · otro tema» en «¿Qué
 El botón «Hablar» interpreta localmente órdenes como coma, punto, signo de pregunta, abrir/cerrar interrogación, dos puntos y nueva línea. La opción se puede desactivar en «Ayuda para dictar» y se conserva solo en este dispositivo. Hay un botón visible para deshacer la puntuación y recuperar el texto recibido del reconocimiento. No se envía el mensaje automáticamente.
 
 Si se utiliza el micrófono del teclado, «Aplicar puntuación dictada» transforma esas expresiones en el texto existente, con opción de deshacer. Esto es una transformación de texto local, no un nuevo servicio de transcripción: no mejora el reconocimiento acústico ni corrige nombres, fechas o palabras mal escuchadas. Las palabras de puntuación se interpretan como órdenes cuando se activa la función; si se desean literalmente, desactívala o deshaz los cambios. No añade peticiones de OpenAI y no almacena grabaciones.
+
+
+## Versión 0.18: Grabación con IA y conversación por turnos
+
+Se mantienen dos entradas: dictado del teléfono y grabación MediaRecorder enviada al Worker. La grabación manual permite escuchar/descartar antes de transcribir y corregir/aceptar el texto después. Los nombres parecidos solo se sugieren. La transcripción requiere configurar dos secretos en Cloudflare; ver [configuración de voz](push-service/README.md#voz-opcional-configuración-en-cloudflare).
+
+«Iniciar conversación» pide autorización para los envíos durante esa sesión. Detecta pausas, reconoce «respóndeme ahora»/«fin del mensaje», pausa el micrófono durante la respuesta y vuelve a escuchar al terminar. Las respuestas se leen por defecto, salvo preferencia previa de solo texto. «Solo texto» desactiva la lectura; «Terminar conversación», cerrar el asistente u ocultar la PWA detienen la sesión. No es una llamada en segundo plano. Las acciones sobre clientes siguen pendientes hasta que se revisen y confirmen.
+
+Se conserva el formato de respaldos y los datos locales existentes. El código de voz y las preferencias del servicio se guardan por dispositivo, fuera de los respaldos. El Worker guarda solo el contador de intentos de voz separado del servicio de avisos, nunca audios o transcripciones. Las pruebas de ciclo de voz, grabación y proveedor se simularon; la compatibilidad real de micrófono, pausas y lectura debe probarse en HONOR/iPhone después de configurar los secretos.

@@ -1,3 +1,5 @@
+import {transcribe} from './transcribe.mjs';
+export {VoiceUsage} from './transcribe.mjs';
 import {buildPushPayload} from '@block65/webcrypto-web-push';
 const DAY=86400000,DEVICE_TTL=30*DAY,MAX_JOBS=200;
 const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');
@@ -19,15 +21,17 @@ export function validateJobs(jobs,now=Date.now()){
 async function bodyOf(request){const text=await request.text();if(text.length>200000)fail('Solicitud demasiado grande.',413);try{return JSON.parse(text);}catch{fail('Solicitud inválida.');}}
 export default {
  async fetch(request,env){
-  const origin=request.headers.get('Origin'),url=new URL(request.url);const cors={'Access-Control-Allow-Origin':env.APP_ORIGIN,'Access-Control-Allow-Methods':'GET,POST,PUT,DELETE,OPTIONS','Access-Control-Allow-Headers':'Authorization,Content-Type','Vary':'Origin','Cache-Control':'no-store'};
+  const origin=request.headers.get('Origin'),url=new URL(request.url);const cors={'Access-Control-Allow-Origin':env.APP_ORIGIN,'Access-Control-Allow-Methods':'GET,POST,PUT,DELETE,OPTIONS','Access-Control-Allow-Headers':'Authorization,Content-Type','Vary':'Origin','Cache-Control':'no-store','Access-Control-Expose-Headers':'X-Transcription-Remaining'};
   if(origin!==env.APP_ORIGIN)return json({error:'Origen no permitido.'},403);
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
   let response;
   try{
+   if(url.pathname==='/transcribe'){response=await transcribe(request,env);}else {
    if(!env.PAIRING_CODE||env.PAIRING_CODE.length<24)fail('Falta configurar PAIRING_CODE (mínimo 24 caracteres) en el servicio.',503);
    if(!['/config','/devices'].includes(url.pathname)&&!/^\/devices\/[a-zA-Z0-9_-]{20,100}(?:\/(?:jobs|test))?$/.test(url.pathname))fail('Ruta no encontrada.',404);
    const stub=env.REMINDERS.get(env.REMINDERS.idFromName('carterita-single-owner'));response=await stub.fetch(request);
-  }catch(err){response=json({error:err.status?err.message:'El servicio de avisos no está disponible.'},err.status||503);}
+   }
+  }catch(err){response=json({error:err.status?err.message:url.pathname==='/transcribe'?'El servicio de voz no está disponible.':'El servicio de avisos no está disponible.'},err.status||503);}
   const headers=new Headers(response.headers);for(const [k,v] of Object.entries(cors))headers.set(k,v);return new Response(response.body,{status:response.status,headers});
  }
 };

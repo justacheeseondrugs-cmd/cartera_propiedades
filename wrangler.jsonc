@@ -7,9 +7,37 @@
   "preview_urls": false,
   "vars": {
     "APP_ORIGIN": "https://justacheeseondrugs-cmd.github.io",
-    "APP_URL": "https://justacheeseondrugs-cmd.github.io/cartera_propiedades/"
+    "APP_URL": "https://justacheeseondrugs-cmd.github.io/cartera_propiedades/",
+    "TRANSCRIBE_DAILY_LIMIT": "20",
+    "TRANSCRIBE_MODEL": "gpt-4o-mini-transcribe"
   },
-  "durable_objects": {"bindings": [{"name": "REMINDERS", "class_name": "ReminderService"}]},
-  "migrations": [{"tag": "v1", "new_sqlite_classes": ["ReminderService"]}],
-  "observability": {"enabled": false}
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "REMINDERS",
+        "class_name": "ReminderService"
+      },
+      {
+        "name": "VOICE_USAGE",
+        "class_name": "VoiceUsage"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "ReminderService"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "VoiceUsage"
+      ]
+    }
+  ],
+  "observability": {
+    "enabled": false
+  }
 }
