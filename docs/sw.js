@@ -1,5 +1,5 @@
-const CACHE='cartera-shell-v14';
-const ASSETS=['./','./index.html','./style.css','./app.js','./pwa.js','./core.js','./ai.js','./attachments.js','./icon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
+const CACHE='cartera-shell-v15';
+const ASSETS=['./','./index.html','./style.css','./app.js','./bootstrap.js','./privacy.js','./device-lock.js','./pwa.js','./core.js','./ai.js','./attachments.js','./icon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
 const SCOPE=new URL(self.registration.scope);
 self.addEventListener('install',event=>{
  // Keep an entire version together; never reuse stale HTTP-cache assets.

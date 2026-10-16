@@ -1,5 +1,7 @@
+import {encryptBackup,decryptBackup,isEncryptedBackup,validateBackupPassword,backupAgeLabel} from './privacy.js';
+import {lockSettings,deviceLockAvailable,enableDeviceLock,disableDeviceLock} from './device-lock.js';
 import {mountClientFiles,exportFiles,exportFilePackages,filesFromPackage,saveFiles,removeFiles,listFiles} from './attachments.js';
-import {AI_KEY,AI_MODEL,reserveCorrection,correctMessage} from './ai.js';
+import {AI_KEY,AI_MODEL,AI_SYSTEM,reserveCorrection,correctMessage} from './ai.js';
 import {cleanRecord,parseBackup,mergeRecords,missingFields,prepareReply,preparePrompt,prepareRevision,sessionFromBackup,localDate,pendingDocuments,dueToday,DOCUMENT_STATUSES,makeCalendar,calendarTest,googleCalendarLink,cleanWritingProfile,writingProfileFromBackup,INITIAL_WRITING_PROFILE,clientPackagePrompt,parseClientPackage,clientMatches,applyClientPackage,STATUSES,INTENTS,KINDS,AREAS,SOURCES,SIMULATION_STATUSES,whatsappLink} from './core.js';
 const $=s=>document.querySelector(s),KEY='cartera-v1';
 let clients=[],selected=null,stat='today',businessArea='all',incoming=null,draftTimer,toastTimer,formDocuments=[],readOnly=false,savedPrompt=null,formContext="general",detailPanel="summary";
@@ -16,7 +18,7 @@ function commit(data,recovery=false,profile=writingProfile,session){if(readOnly&
 function current(){return clients.find(c=>c.id===selected);}
 function saveContext(){if(!selected||!$('#template'))return;contexts.set(selected,{original:$('#original').value,style:$('#template').value,tone:$('#tone').value,prompt:$('#prompt')?.value||'',extra:$('#revision-extra')?.value||'',adjustments:[...document.querySelectorAll('[data-adjustment]:checked')].map(el=>el.dataset.adjustment)});}
 function flushDraft(){clearTimeout(draftTimer);saveContext();const c=current(),field=$('#reply');if(!c||!field||c.draft===field.value)return true;const next=clients.map(r=>r.id===c.id?{...r,draft:field.value,updatedAt:new Date().toISOString()}:r);if(commit(next)){if($('#draft-state'))$('#draft-state').textContent='Borrador guardado en este dispositivo';if($('#wa-draft-preview'))$('#wa-draft-preview').textContent=field.value.trim()?'Se abrirá con el borrador guardado.':'Primero prepara un borrador en Mensaje.';return true;}return false;}
-function updateStats(){$('.intro .muted').textContent=clients.length?'Tienes '+clients.filter(c=>dueToday(c)).length+' cliente(s) por contactar hoy o de días anteriores.':'Empieza añadiendo un cliente. Solo necesitas su nombre.';const scoped=clients.filter(c=>businessArea==='all'||c.businessArea===businessArea);$('#count-all').textContent=scoped.length;$('#count-docs').textContent=scoped.filter(c=>c.businessArea==='Leasing'&&c.status!=='Cerrado'&&pendingDocuments(c).length).length;$('#count-simulation').textContent=scoped.filter(awaiting).length;$('#count-today').textContent=scoped.filter(c=>dueToday(c)).length;document.querySelectorAll('[data-stat]').forEach(b=>{b.classList.toggle('active-stat',b.dataset.stat===stat);b.setAttribute('aria-pressed',String(b.dataset.stat===stat));});}
+function updateStats(){updateBackupReminder();$('.intro .muted').textContent=clients.length?'Tienes '+clients.filter(c=>dueToday(c)).length+' cliente(s) por contactar hoy o de días anteriores.':'Empieza añadiendo un cliente. Solo necesitas su nombre.';const scoped=clients.filter(c=>businessArea==='all'||c.businessArea===businessArea);$('#count-all').textContent=scoped.length;$('#count-docs').textContent=scoped.filter(c=>c.businessArea==='Leasing'&&c.status!=='Cerrado'&&pendingDocuments(c).length).length;$('#count-simulation').textContent=scoped.filter(awaiting).length;$('#count-today').textContent=scoped.filter(c=>dueToday(c)).length;document.querySelectorAll('[data-stat]').forEach(b=>{b.classList.toggle('active-stat',b.dataset.stat===stat);b.setAttribute('aria-pressed',String(b.dataset.stat===stat));});}
 function render(){
  updateStats();$('#new-client').disabled=readOnly;$('#demo').disabled=readOnly;
  const search=$('#search').value.toLocaleLowerCase().trim(),status=$('#filter-status').value,intent=$('#filter-intent').value;
@@ -147,6 +149,11 @@ document.addEventListener('click',async e=>{
  if(b.id==='copy'){flushDraft();copyField('reply');}
  if(b.id==='generate-prompt'){const c=current();if(c)$('#prompt').value=preparePrompt(c,$('#original').value,$('#template').value,$('#tone').value,writingProfile);}
  if(b.id==='correct-in-app'){runCorrection();return;}
+ if(b.id==='privacy-open'){openPrivacy();return;}
+ if(b.id==='request-persistence'){requestPersistence();return;}
+ if(b.id==='enable-device-lock'){configureDeviceLock(true);return;}
+ if(b.id==='disable-device-lock'){configureDeviceLock(false);return;}
+ if(b.id==='lock-now'){if(!flushDraft())return;window.dispatchEvent(new Event('carterita-lock-now'));return;}
  if(b.id==='ai-settings'){openAISettings();return;}
  if(b.id==='ai-forget'){try{localStorage.removeItem(AI_KEY);$('#ai-key').value='';$('#ai-key-state').textContent='Sin clave guardada.';toast('Clave eliminada de este navegador.');}catch{toast('No se pudo eliminar la clave.');}return;}
  if(b.id==='ai-accept'){
@@ -185,27 +192,30 @@ $('#demo').onclick=()=>{
  const examples=[cleanRecord({...base,id:'demo-cartera-leasing',name:'Carolina · ejemplo ficticio',intent:'Comprar',businessArea:'Leasing',source:'Referido',status:'Papeles en curso',nextAction:'Solicitar el antecedente que falta y consultar a la entidad',simulationStatus:'Esperando respuesta',simulationEntity:'Entidad de ejemplo',documents:[{id:'doc-example-1',name:'Antecedente de ejemplo A (editar)',status:'Recibido',notes:''},{id:'doc-example-2',name:'Antecedente de ejemplo B (editar)',status:'Faltante',notes:'Estos nombres son ficticios, no requisitos reales.'}]}),cleanRecord({...base,id:'demo-cartera-dataprop',name:'Ana · ejemplo ficticio',intent:'Arrendar',businessArea:'Corretaje',source:'Dataprop',area:'Ñuñoa',kind:'Departamento',budget:'Hasta $600.000 mensuales',property:'DEP-EJEMPLO',nextAction:'Presentarse y confirmar qué información necesita',notes:'Ejemplo ficticio. Confirma la autorización para contactar y los datos reales antes de enviar.'})];
  const next=[...clients];for(const c of examples)if(!next.some(r=>r.id===c.id))next.push(c);if(commit(next)){businessArea='all';stat='all';$('#search').value='';$('#filter-status').value='';$('#filter-intent').value='';document.querySelectorAll('[data-area]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.area==='all')));selected=examples[0].id;render();}
 };
-$('#backup-open').onclick=()=>{if(!flushDraft())return;let last;try{last=localStorage.getItem('cartera-last-backup');}catch{}$('#last-backup').textContent=last?'Última exportación: '+new Date(last).toLocaleString('es-CL'):'Aún no has exportado un respaldo.';$('#backup-dialog').showModal();};
-let packageDownloadUrls=[];
+$('#backup-open').onclick=()=>{if(!flushDraft())return;let last;try{last=localStorage.getItem('carterita-confirmed-backup');}catch{}$('#last-backup').textContent=last?'Último respaldo confirmado: '+new Date(last).toLocaleString('es-CL'):'Todavía no has confirmado un respaldo guardado.';$('#backup-dialog').showModal();};
+let packageDownloadUrls=[];let backupPasswordRequest=null,aiSendRequest=null;
 function clearPackageDownloads(){for(const url of packageDownloadUrls)URL.revokeObjectURL(url);packageDownloadUrls=[];$('#package-download-list').replaceChildren();}
 $('#export').onclick=async()=>{
  const button=$('#export');if(button.disabled)return;button.disabled=true;
  try{
   const saved=flushDraft(),field=$('#reply');const data=!saved&&field?clients.map(c=>c.id===selected?{...c,draft:field.value,updatedAt:new Date().toISOString()}:c):clients;
   const base={...envelope(data),session:captureSession(data)};
-  const blobs=await exportFilePackages(base,$('#export-files').checked);clearPackageDownloads();const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+  const encrypted=$('#encrypt-export').checked,password=$('#backup-password').value;
+  if(encrypted){validateBackupPassword(password);if(password!==$('#backup-password-confirm').value)throw new Error('Las contraseñas no coinciden.');}
+  const blobs=await exportFilePackages(base,$('#export-files').checked);clearPackageDownloads();$('#confirm-backup-saved').hidden=true;const stamp=new Date().toISOString().replace(/[:.]/g,'-');
   for(let i=0;i<blobs.length;i++){
-   const url=URL.createObjectURL(blobs[i]);packageDownloadUrls.push(url);const a=document.createElement('a');a.href=url;a.download='carterita-paquete-'+stamp+(blobs.length>1?'-parte-'+(i+1)+'-de-'+blobs.length:'')+'.json';a.className='secondary';a.textContent='Descargar '+(blobs.length>1?'parte '+(i+1)+' de '+blobs.length:'paquete')+' ('+(blobs[i].size/1024/1024).toFixed(1)+' MB)';$('#package-download-list').append(a);
+   $('#last-backup').textContent=(encrypted?'Cifrando':'Preparando')+' parte '+(i+1)+' de '+blobs.length+'…';
+   const download=encrypted?await encryptBackup(blobs[i],password):blobs[i];const url=URL.createObjectURL(download);packageDownloadUrls.push(url);const a=document.createElement('a');a.href=url;a.download='carterita-paquete-'+(encrypted?'cifrado-':'')+stamp+(blobs.length>1?'-parte-'+(i+1)+'-de-'+blobs.length:'')+'.json';a.className='secondary';a.textContent='Descargar '+(blobs.length>1?'parte '+(i+1)+' de '+blobs.length:'paquete')+' ('+(download.size/1024/1024).toFixed(1)+' MB)';$('#package-download-list').append(a);
   }
   if(blobs.length===1){$('#package-download-list a').click();toast('Paquete preparado. Comprueba su descarga.');}
   else toast('Paquete dividido en '+blobs.length+' partes. Descarga cada una desde los enlaces de abajo.');
   $('#package-download-help').textContent=blobs.length>1?'Descarga TODAS las partes. En el otro dispositivo, carga y confirma cada archivo, uno por uno. Las fichas no se duplican; cada parte añade sus documentos.':'El enlace permite descargar de nuevo sin volver a preparar el paquete. Comprueba el archivo en Descargas.';
-  try{localStorage.setItem('cartera-last-backup',new Date().toISOString());}catch{}
+  $('#confirm-backup-saved').hidden=false;
   $('#last-backup').textContent='Paquete preparado. Comprueba que descargaste '+(blobs.length>1?'todas las partes.':'el archivo.');
- }catch(err){toast('No se pudo exportar: '+err.message);}finally{button.disabled=false;}
+ }catch(err){clearPackageDownloads();$('#confirm-backup-saved').hidden=true;$('#last-backup').textContent='El paquete no se preparó completamente. Vuelve a intentarlo.';toast('No se pudo exportar: '+err.message);}finally{button.disabled=false;$('#backup-password').value='';$('#backup-password-confirm').value='';}
 };
 
-$('#import').onchange=async e=>{if(importingFiles)return;const generation=++importGeneration;incoming=null;incomingProfile=null;incomingSession=null;incomingFiles=[];$('#import-preview').replaceChildren();const file=e.target.files[0];if(!file)return;try{if(file.size>80*1024*1024)throw new Error('El respaldo supera el máximo de 80 MB.');const backupText=await file.text();if(generation!==importGeneration)return;const records=parseBackup(backupText),profile=writingProfileFromBackup(backupText),session=sessionFromBackup(backupText),files=await filesFromPackage(JSON.parse(backupText));if(generation!==importGeneration)return;incoming=records;incomingProfile=profile;incomingSession=session;incomingFiles=files;const old=new Map(clients.map(c=>[c.id,c]));const adds=incoming.filter(c=>!old.has(c.id)).length,updates=incoming.filter(c=>old.has(c.id)&&Date.parse(c.updatedAt)>Date.parse(old.get(c.id).updatedAt)).length;$('#import-preview').innerHTML=`<div class="import-summary"><strong>${adds} nuevas · ${updates} actualizadas</strong><p class="small">Las demás consultas existentes se conservarán. ${incomingFiles.length} archivo(s) adjunto(s) para guardar en sus fichas.</p><ul>${incoming.slice(0,15).map(c=>`<li>${esc(c.name)} · ${esc(c.businessArea)}</li>`).join('')}</ul>${incomingProfile?'<label class="profile-import-choice"><input type="checkbox" id="import-writing-profile" checked> Recuperar también el perfil de escritura (reemplaza el actual)</label>':''}${incomingSession?'<label class="profile-import-choice"><input type="checkbox" id="import-session" checked> Recuperar también mensajes en preparación y pantalla abierta</label>':''}<p class="small muted">Al confirmar se guardará en este navegador. No se copiará ninguna clave API ni se borrarán clientes ausentes del paquete.</p><button class="primary" id="confirm-import">Cargar y guardar paquete</button></div>`;}catch(err){if(generation!==importGeneration)return;incoming=null;incomingProfile=null;incomingSession=null;incomingFiles=[];$('#import-preview').replaceChildren();toast('No se pudo importar: '+err.message);}};
+$('#import').onchange=async e=>{if(importingFiles)return;const generation=++importGeneration;incoming=null;incomingProfile=null;incomingSession=null;incomingFiles=[];$('#import-preview').replaceChildren();const file=e.target.files[0];if(!file)return;try{if(file.size>120*1024*1024)throw new Error('El respaldo supera el máximo de 120 MB.');let backupText=await file.text();const outer=JSON.parse(backupText);if(isEncryptedBackup(outer)){const password=await askBackupPassword();backupText=await decryptBackup(outer,password);}else if(file.size>80*1024*1024)throw new Error('El paquete sin cifrar supera 80 MB.');if(generation!==importGeneration)return;const records=parseBackup(backupText),profile=writingProfileFromBackup(backupText),session=sessionFromBackup(backupText),files=await filesFromPackage(JSON.parse(backupText));if(generation!==importGeneration)return;incoming=records;incomingProfile=profile;incomingSession=session;incomingFiles=files;const old=new Map(clients.map(c=>[c.id,c]));const adds=incoming.filter(c=>!old.has(c.id)).length,updates=incoming.filter(c=>old.has(c.id)&&Date.parse(c.updatedAt)>Date.parse(old.get(c.id).updatedAt)).length;$('#import-preview').innerHTML=`<div class="import-summary"><strong>${adds} nuevas · ${updates} actualizadas</strong><p class="small">Las demás consultas existentes se conservarán. ${incomingFiles.length} archivo(s) adjunto(s) para guardar en sus fichas.</p><ul>${incoming.slice(0,15).map(c=>`<li>${esc(c.name)} · ${esc(c.businessArea)}</li>`).join('')}</ul>${incomingProfile?'<label class="profile-import-choice"><input type="checkbox" id="import-writing-profile" checked> Recuperar también el perfil de escritura (reemplaza el actual)</label>':''}${incomingSession?'<label class="profile-import-choice"><input type="checkbox" id="import-session" checked> Recuperar también mensajes en preparación y pantalla abierta</label>':''}<p class="small muted">Al confirmar se guardará en este navegador. No se copiará ninguna clave API ni se borrarán clientes ausentes del paquete.</p><button class="primary" id="confirm-import">Cargar y guardar paquete</button></div>`;}catch(err){if(generation!==importGeneration)return;incoming=null;incomingProfile=null;incomingSession=null;incomingFiles=[];$('#import-preview').replaceChildren();toast('No se pudo importar: '+err.message);}};
 let importingFiles=false,importGeneration=0;
 $('#import-preview').onclick=async e=>{
  if(e.target.id!=='confirm-import'||!incoming||importingFiles)return;if(!readOnly&&!flushDraft())return;
@@ -276,7 +286,7 @@ function openAISettings(){
 }
 $('#ai-settings-form').onsubmit=e=>{e.preventDefault();const key=$('#ai-key').value.trim();try{if(key){if(!key.startsWith('sk-')||key.length<20)throw new Error('Revisa la clave de la plataforma API de OpenAI.');localStorage.setItem(AI_KEY,key);}else if(!localStorage.getItem(AI_KEY))throw new Error('Introduce tu clave de OpenAI.');$('#ai-key').value='';$('#ai-settings-dialog').close();toast('IA configurada. Vuelve al mensaje y pulsa Corregir aquí con IA.');}catch(err){toast(err.message);}};
 async function runCorrection(){
- if(aiBusy||readOnly)return;const c=current();if(!c)return;
+ if(aiBusy||readOnly||aiSendRequest)return;const c=current();if(!c)return;
  let key,prompt,original,attempt;
  try{
   key=localStorage.getItem(AI_KEY);if(!key){openAISettings();return;}
@@ -286,12 +296,13 @@ async function runCorrection(){
   const reference={...c,lastMessage:'',notes:'',phone:'',email:'',name:'',documents:c.documents.slice(0,10)};
   prompt=prepareRevision(reference,original,[...document.querySelectorAll('[data-adjustment]:checked')].map(el=>el.dataset.adjustment),$('#revision-extra').value,profile);
   if(prompt.length>14000)throw new Error('Acorta el borrador o las indicaciones para corregirlo.');
+  if(!await confirmAISend(prompt))return;if(current()?.id!==c.id||$('#reply')?.value!==original)throw new Error('El borrador cambió. Revisa los cambios antes de enviar.');
   if(!flushDraft())return;attempt=reserveCorrection(localStorage,localDate());
  }catch(err){toast(err.message);return;}
  aiBusy=true;const button=$('#correct-in-app'),progress=$('#ai-progress');button.disabled=true;progress.textContent=`Corrigiendo… Intento ${attempt} de 20 hoy. Una petición, sin reintentos automáticos.`;
  try{
   const text=await correctMessage({key,prompt});aiProposal={clientId:c.id,original};
-  $('#ai-original').textContent=original;$('#ai-proposal').value=text;$('#ai-review-dialog').showModal();
+  $('#ai-original').textContent=original;$('#ai-proposal').value=text;if(!document.documentElement.classList.contains('device-locked'))$('#ai-review-dialog').showModal();
  }catch(err){toast(err.message);}
  finally{aiBusy=false;button.disabled=false;progress.textContent='';}
 }
@@ -305,3 +316,34 @@ function restoreSession(session){
  selected=session.selected;detailPanel=session.panel;stat='all';businessArea='all';$('#search').value='';$('#filter-status').value='';$('#filter-intent').value='';document.querySelectorAll('[data-area]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.area==='all')));render();
  const p=session.proposal;if(p&&clients.some(c=>c.id===p.clientId&&c.draft===p.original)){aiProposal={clientId:p.clientId,original:p.original};$('#ai-original').textContent=p.original;$('#ai-proposal').value=p.text;selected=p.clientId;detailPanel='message';render();$('#ai-review-dialog').showModal();}
 }
+
+function updateBackupReminder(){
+ const banner=$('#backup-warning');if(!banner)return;let last;try{last=localStorage.getItem('carterita-confirmed-backup');}catch{}
+ const age=backupAgeLabel(last);banner.hidden=!clients.length||!age.overdue;banner.textContent=age.text+' Guarda un paquete desde Más opciones → Guardar / cargar paquete.';
+}
+$('#confirm-backup-saved').onclick=()=>{try{localStorage.setItem('carterita-confirmed-backup',new Date().toISOString());updateBackupReminder();$('#last-backup').textContent='Respaldo confirmado hoy. Conserva el archivo y su contraseña.';toast('Fecha de respaldo actualizada.');}catch{toast('No se pudo guardar la fecha del respaldo.');}};
+$('#encrypt-export').onchange=()=>{$('#backup-password-fields').hidden=!$('#encrypt-export').checked;clearPackageDownloads();$('#confirm-backup-saved').hidden=true;$('#package-download-help').textContent='Prepara el paquete de nuevo con la protección seleccionada.';};
+$('#backup-dialog').addEventListener('close',()=>{$('#backup-password').value='';$('#backup-password-confirm').value='';});
+function askBackupPassword(){if(document.documentElement.classList.contains('device-locked'))return Promise.reject(new Error('Desbloquea Carterita y vuelve a seleccionar el respaldo.'));return new Promise((resolve,reject)=>{backupPasswordRequest={resolve,reject};$('#decrypt-password').value='';$('#decrypt-dialog').showModal();$('#decrypt-password').focus();});}
+$('#decrypt-form').onsubmit=e=>{e.preventDefault();const request=backupPasswordRequest;backupPasswordRequest=null;const password=$('#decrypt-password').value;$('#decrypt-password').value='';$('#decrypt-dialog').close();request?.resolve(password);};
+$('#decrypt-dialog').addEventListener('close',()=>{const request=backupPasswordRequest;backupPasswordRequest=null;$('#decrypt-password').value='';request?.reject(new Error('Apertura del respaldo cancelada.'));});
+function confirmAISend(prompt){return new Promise(resolve=>{aiSendRequest={resolve};$('#ai-send-preview').value=prompt;$('#ai-send-system').textContent=AI_SYSTEM;$('#ai-send-dialog').showModal();});}
+$('#ai-send-confirm').onclick=()=>{const request=aiSendRequest;aiSendRequest=null;$('#ai-send-dialog').close();request?.resolve(true);};
+$('#ai-send-dialog').addEventListener('close',()=>{const request=aiSendRequest;aiSendRequest=null;request?.resolve(false);});
+async function refreshPrivacy(){
+ const status=$('#storage-protection-state');
+ try{
+  if(!navigator.storage?.persisted){status.textContent='Este navegador no permite comprobar la protección del almacenamiento.';$('#request-persistence').disabled=true;}
+  else{const persistent=await navigator.storage.persisted();let usage='';if(navigator.storage.estimate){const estimate=await navigator.storage.estimate();if(Number.isFinite(estimate.usage)&&Number.isFinite(estimate.quota))usage=' Uso aproximado del sitio: '+(estimate.usage/1024/1024).toFixed(1)+' MB de '+(estimate.quota/1024/1024).toFixed(0)+' MB.';}status.textContent=(persistent?'Almacenamiento persistente concedido.':'Almacenamiento persistente todavía no concedido.')+usage;$('#request-persistence').disabled=persistent;}
+ }catch{status.textContent='No se pudo comprobar la protección del almacenamiento.';}
+ try{const enabled=Boolean(lockSettings()),available=await deviceLockAvailable();$('#device-lock-state').textContent=enabled?'Bloqueo de acceso activado en este navegador.':available?'Puedes configurar el desbloqueo que ofrezca tu dispositivo.':'No se detectó un método compatible. Prueba Chrome actualizado y configura el bloqueo del teléfono.';$('#enable-device-lock').hidden=enabled;$('#enable-device-lock').disabled=!available;$('#disable-device-lock').hidden=$('#lock-now').hidden=!enabled;$('#lock-recovery-confirm').closest('label').hidden=enabled;}catch(err){$('#device-lock-state').textContent=err.message;}
+}
+function openPrivacy(){$('#privacy-feedback').textContent='';$('#lock-recovery-confirm').checked=false;$('#privacy-dialog').showModal();refreshPrivacy();}
+async function requestPersistence(){const button=$('#request-persistence');button.disabled=true;try{if(!navigator.storage?.persist)throw new Error('Este navegador no permite solicitar almacenamiento persistente.');const granted=await navigator.storage.persist();$('#privacy-feedback').textContent=granted?'El navegador concedió almacenamiento persistente. Sigue guardando respaldos.':'El navegador no lo concedió. Tus datos actuales siguen ahí; conserva respaldos frecuentes.';}catch(err){$('#privacy-feedback').textContent=err.message;}finally{button.disabled=false;refreshPrivacy();}}
+async function configureDeviceLock(enable){
+ const button=$(enable?'#enable-device-lock':'#disable-device-lock');if(button.disabled)return;
+ if(enable&&!$('#lock-recovery-confirm').checked){$('#privacy-feedback').textContent='Primero guarda un respaldo protegido y confirma que conoces su contraseña.';return;}
+ button.disabled=true;try{if(enable)await enableDeviceLock();else await disableDeviceLock();$('#privacy-feedback').textContent=enable?'Desbloqueo configurado y comprobado. Se bloqueará al ocultar la app.':'Bloqueo de acceso desactivado.';}catch(err){$('#privacy-feedback').textContent=err.message;}finally{button.disabled=false;refreshPrivacy();}
+}
+
+window.addEventListener('carterita-unlocked',()=>{if(aiProposal&&current()?.id===aiProposal.clientId&&$('#reply')?.value===aiProposal.original&&!$('#ai-review-dialog').open)$('#ai-review-dialog').showModal();});
