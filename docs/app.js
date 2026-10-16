@@ -1,3 +1,4 @@
+import {initCalendar} from './calendar-sync.js';
 import {setupVoiceInput} from './voice-input.js';
 import {ASSISTANT_SYSTEM,assistantPrompt,parseAssistantPlan,applyAssistantPlan,requestAssistantPlan,setupAssistantVoice} from './assistant.js';
 import {initPush,queuePushSync,openPushSettings,getClientReminderState} from './push.js';
@@ -7,6 +8,7 @@ import {mountClientFiles,exportFiles,exportFilePackages,filesFromPackage,saveFil
 import {AI_KEY,AI_MODEL,AI_SYSTEM,reserveCorrection,correctMessage} from './ai.js';
 import {cleanRecord,parseBackup,mergeRecords,missingFields,prepareReply,preparePrompt,prepareRevision,sessionFromBackup,localDate,pendingDocuments,dueToday,DOCUMENT_STATUSES,makeCalendar,calendarTest,googleCalendarLink,cleanWritingProfile,writingProfileFromBackup,INITIAL_WRITING_PROFILE,clientPackagePrompt,parseClientPackage,clientMatches,applyClientPackage,STATUSES,INTENTS,KINDS,AREAS,SOURCES,SIMULATION_STATUSES,whatsappLink} from './core.js';
 const $=s=>document.querySelector(s),KEY='cartera-v1';
+let calendarView=null;
 let clients=[],selected=null,stat='today',businessArea='all',incoming=null,draftTimer,toastTimer,formDocuments=[],readOnly=false,savedPrompt=null,formContext="general",detailPanel="summary";
 let assistantInteraction=0;let voiceInput=null;let aiBusy=false,aiProposal=null,incomingSession=null,incomingFiles=[];
 const contexts=new Map();let writingProfile=cleanWritingProfile(INITIAL_WRITING_PROFILE),writingExamples=[],incomingProfile=null;let packageEntries=[];let packageAssistant=false,assistantBaseline={},assistantPlan=null,assistantContext=null,assistantBusy=false,assistantAbort=null,assistantMessages=[],assistantChatContextId=null;
@@ -17,7 +19,7 @@ function toast(message){$('#toast').textContent=message;$('#toast').classList.ad
 function storageError(){ $('#storage-message').textContent='No se pudo guardar. Exporta un respaldo antes de cerrar; revisa el espacio o permisos del navegador.';toast('No se pudo guardar. No cierres la app sin exportar los datos.');}
 try{const raw=localStorage.getItem(KEY);if(raw){clients=parseBackup(raw);writingProfile=writingProfileFromBackup(raw)||cleanWritingProfile(INITIAL_WRITING_PROFILE);}}catch{readOnly=true;storageError();$('#storage-message').textContent='No se pudo leer el almacenamiento. Recupera un respaldo desde Respaldos; no reemplazaremos los datos existentes.';}
 function envelope(data,profile=writingProfile,session=captureSession(data)){return {session,app:'cartera',version:7,exportedAt:new Date().toISOString(),clients:data,writingProfile:profile};}
-function commit(data,recovery=false,profile=writingProfile,session){if(readOnly&&!recovery){toast('Recupera un respaldo o recarga antes de editar.');return false;}try{localStorage.setItem(KEY,JSON.stringify(envelope(data,profile,session)));clients=data;writingProfile=profile;queuePushSync();return true;}catch{storageError();return false;}}
+function commit(data,recovery=false,profile=writingProfile,session){if(readOnly&&!recovery){toast('Recupera un respaldo o recarga antes de editar.');return false;}try{localStorage.setItem(KEY,JSON.stringify(envelope(data,profile,session)));clients=data;writingProfile=profile;queuePushSync();calendarView?.queue();return true;}catch{storageError();return false;}}
 function current(){return clients.find(c=>c.id===selected);}
 function saveContext(){if(!selected||!$('#template'))return;contexts.set(selected,{original:$('#original').value,style:$('#template').value,tone:$('#tone').value,prompt:$('#prompt')?.value||'',extra:$('#revision-extra')?.value||'',customGoal:$('#custom-goal')?.value||'',adjustments:[...document.querySelectorAll('[data-adjustment]:checked')].map(el=>el.dataset.adjustment)});}
 function flushDraft(){clearTimeout(draftTimer);saveContext();const c=current(),field=$('#reply');if(!c||!field||c.draft===field.value)return true;const next=clients.map(r=>r.id===c.id?{...r,draft:field.value,updatedAt:new Date().toISOString()}:r);if(commit(next)){if($('#draft-state'))$('#draft-state').textContent='Borrador guardado en este dispositivo';if($('#wa-draft-preview'))$('#wa-draft-preview').textContent=field.value.trim()?'Se abrirá con el borrador guardado.':'Primero prepara un borrador en Mensaje.';return true;}return false;}
@@ -442,3 +444,5 @@ function invalidateAssistant(){assistantPlan=null;$('#assistant-ready-hint').hid
 $('#assistant-input').addEventListener('input',invalidateAssistant);$('#assistant-context').addEventListener('change',()=>{invalidateAssistant();assistantChatContextId=$('#assistant-context').checked?current()?.id||assistantChatContextId:null;});
 
 voiceInput=setupVoiceInput({input:$('#assistant-input'),button:$('#assistant-talk'),status:$('#assistant-voice-state'),dialog:$('#assistant-dialog'),phoneVoice:assistantVoice,onSend:()=>$('#assistant-chat-form').onsubmit({preventDefault(){},voiceTurn:true}),getNames:()=>[...(current()?[current().name]:[]),...clients.map(c=>c.name)],onStop:()=>assistantAbort?.abort()});
+
+calendarView=initCalendar({getClients:()=>clients,canSync:()=>!readOnly,openClient:id=>{if(!flushDraft())return;selected=id;detailPanel='summary';render();}});
