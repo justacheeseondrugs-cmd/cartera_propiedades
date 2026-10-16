@@ -387,7 +387,7 @@ function refreshClientReminderStates(){
 window.addEventListener('carterita-reminder-state',refreshClientReminderStates);
 refreshClientReminderStates();
 
-const assistantVoice=setupAssistantVoice({input:$('#assistant-input'),button:$('#assistant-talk'),status:$('#assistant-voice-state'),readButton:$('#assistant-listen'),readEnabled:$('#assistant-read'),response:$('#assistant-response'),dialog:$('#assistant-dialog'),onDictationEnd:()=>voiceInput?.onPhoneEnd(),onDictationError:message=>voiceInput?.onPhoneError(message)});
+const assistantVoice=setupAssistantVoice({input:$('#assistant-input'),button:$('#assistant-talk'),status:$('#assistant-voice-state'),readButton:$('#assistant-listen'),readEnabled:$('#assistant-read'),response:$('#assistant-response'),dialog:$('#assistant-dialog'),onDictationResult:final=>voiceInput?.onPhoneResult(final),onDictationEnd:()=>voiceInput?.onPhoneEnd(),onDictationError:message=>voiceInput?.onPhoneError(message)});
 function renderAssistantChat(pending=''){
  const log=$('#assistant-chat-log');log.replaceChildren();
  if(!assistantMessages.length&&!pending){const hello=document.createElement('p');hello.className='assistant-chat-empty';hello.textContent='Hola, ¿qué necesitas organizar hoy? Puedes contarme los datos de a poco.';log.append(hello);}

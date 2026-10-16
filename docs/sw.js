@@ -1,4 +1,4 @@
-const CACHE='cartera-shell-v28';
+const CACHE='cartera-shell-v29';
 const ASSETS=['./','./index.html','./style.css','./app.js','./navigation.js','./interface.css','./assistant.js','./voice-input.js','./calendar-sync.js','./calendar-setup.html','./push.js','./bootstrap.js','./privacy.js','./device-lock.js','./pwa.js','./core.js','./ai.js','./attachments.js','./icon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
 const SCOPE=new URL(self.registration.scope);
 self.addEventListener('install',event=>{

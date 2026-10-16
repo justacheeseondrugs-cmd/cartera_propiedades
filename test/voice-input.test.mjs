@@ -7,6 +7,7 @@ function environment(limit=20){const map=new Map();let queue=Promise.resolve();c
 function audioRequest({auth=token,names=['Paola Hernández'],blob=new Blob(['recording'],{type:'audio/webm'}),duration='5'}={}){const form=new FormData();form.set('audio',blob,'clip.webm');form.set('duration',duration);form.set('names',JSON.stringify(names));return new Request('https://service/transcribe',{method:'POST',headers:{Origin:origin,Authorization:'Bearer '+auth},body:form});}
 test('end-of-turn commands are recognized only at the end and preserve the actual instruction',()=>{
  assert.deepEqual(splitVoiceTurn('Agrega a Elena. Respóndeme ahora.'),{ended:true,text:'Agrega a Elena.'});
+ assert.deepEqual(splitVoiceTurn('Hola. Respóndeme, ahora,'),{ended:true,text:'Hola.'});
  assert.deepEqual(splitVoiceTurn('Agrega a Elena, Carterita, responde ahora'),{ended:true,text:'Agrega a Elena'});
  assert.equal(splitVoiceTurn('Le dije responde ahora pero no contestó').ended,false);
  assert.equal(splitVoiceTurn('Fin del mensaje').text,'');assert.equal(splitVoiceTurn('Guarda el dato hasta aquí deja el mensaje').ended,true);
