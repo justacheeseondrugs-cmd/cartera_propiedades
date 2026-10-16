@@ -28,9 +28,9 @@ test('push server enrolls, authenticates devices, replaces snapshots and cancels
 test('alarms use encrypted Web Push, retire gone subscriptions, retry temporary errors and avoid resending accepted jobs',async()=>{
  const {instance,request,storage}=await service(),sub=await fixture();const d=await(await request('/devices',undefined,'POST',{subscription:sub})).json();const path='/devices/'+d.deviceId;const at=Date.now()-1000;await request(path+'/jobs',d.deviceToken,'PUT',{revision:1,jobs:[{id:'opaque-id',at}]});
  const realFetch=globalThis.fetch;let calls=0,status=201;
- globalThis.fetch=async(url,options)=>{calls++;assert.equal(url,sub.endpoint);assert.equal(options.method.toUpperCase(),'POST');assert.equal(new Headers(options.headers).get('content-encoding'),'aes128gcm');assert.equal(options.redirect,'error');assert.doesNotMatch(new TextDecoder().decode(options.body),/opaque-id/);return new Response(null,{status});};
+ globalThis.fetch=async(url,options)=>{calls++;assert.equal(url,sub.endpoint);assert.equal(options.method.toUpperCase(),'POST');assert.equal(new Headers(options.headers).get('content-encoding'),'aes128gcm');assert.equal(options.redirect,'manual');assert.doesNotMatch(new TextDecoder().decode(options.body),/opaque-id/);return new Response(null,{status});};
  try{await instance.alarm();assert.equal(calls,1);await instance.alarm();assert.equal(calls,1);await request(path+'/jobs',d.deviceToken,'PUT',{revision:2,jobs:[{id:'opaque-id',at}]});assert.equal((await instance.readDevices())[0].jobs.length,0);
-  status=503;await request(path+'/jobs',d.deviceToken,'PUT',{revision:3,jobs:[{id:'retry-id',at}]});await instance.alarm();const retry=(await instance.readDevices())[0].jobs[0];assert.equal(retry.attempts,1);assert.ok(retry.nextAttempt>Date.now());
+  status=302;await request(path+'/jobs',d.deviceToken,'PUT',{revision:3,jobs:[{id:'retry-id',at}]});await instance.alarm();const retry=(await instance.readDevices())[0].jobs[0];assert.equal(retry.attempts,1);assert.ok(retry.nextAttempt>Date.now());
   status=410;await request(path+'/jobs',d.deviceToken,'PUT',{revision:4,jobs:[{id:'gone-id',at}]});await instance.alarm();assert.equal((await instance.readDevices()).length,0);assert.equal(storage.alarmAt,null);
  }finally{globalThis.fetch=realFetch;}
 });

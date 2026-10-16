@@ -59,7 +59,8 @@ export class ReminderService {
  }
  async deliver(device,payload){
   const vapid=await this.config(),options=await buildPushPayload({data:JSON.stringify(payload),options:{ttl:3600}},device.subscription,vapid);
-  const response=await fetch(device.subscription.endpoint,{...options,redirect:'error',signal:AbortSignal.timeout(10000)});await response.body?.cancel();return response.status;
+  // Workers supports follow/manual only. Manual also prevents leaking the request across redirects.
+  const response=await fetch(device.subscription.endpoint,{...options,redirect:'manual',signal:AbortSignal.timeout(10000)});if(response.body)await response.body.cancel().catch(()=>{});return response.status;
  }
  async rearm(devices){const now=Date.now(),times=devices.filter(d=>now-d.lastSeen<DEVICE_TTL).flatMap(d=>d.jobs.map(j=>j.nextAttempt));if(times.length)await this.ctx.storage.setAlarm(Math.max(now+1000,Math.min(...times)));else await this.ctx.storage.deleteAlarm();}
  async alarm(){return this.ctx.blockConcurrencyWhile(async()=>{

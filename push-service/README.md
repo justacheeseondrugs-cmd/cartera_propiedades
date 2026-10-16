@@ -42,3 +42,6 @@ El último comando pide el valor sin incluirlo en el historial. El login abre el
 ## Verificación realizada
 
 `npm test` cubre autenticación, orígenes, validación de destinos, programación, reemplazo/cancelación, reintentos, retiro de suscripciones, cifrado RFC 8291 y manejo seguro del click. `wrangler deploy --dry-run` compila el servicio. Se probó con el runtime local real de Cloudflare el alta de dispositivo, persistencia SQLite, actualización y eliminación de horarios. Se simuló la UI de permisos/activación/sincronización/desactivación. No se envió ninguna push real ni se desplegó el servicio en la cuenta del usuario: faltan conectar Cloudflare/GitHub, guardar el secreto y probar en HONOR.
+
+### Compatibilidad de las peticiones push
+Cloudflare Workers solo admite los modos de redirección `follow` y `manual`. El envío usa `manual` para no seguir redirecciones del endpoint; una respuesta 3xx no se considera una entrega aceptada. La opción estándar de navegador `error` provoca un TypeError en Workers antes de enviar la petición. Esta diferencia se reprodujo y corrigió con el runtime real, no solo con el mock de fetch de Node.
