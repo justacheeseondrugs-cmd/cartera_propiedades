@@ -1,5 +1,5 @@
 const KEY='carterita-push-v1';
-let saved,readClients=()=>[],notify=()=>{},syncing=false,dirty=false,timer;
+let saved,readClients=()=>[],notify=()=>{},syncing=false,dirty=false,timer,testReceived=false;
 const $=s=>document.querySelector(s);
 export function serviceURL(value){const url=new URL(value);if(url.protocol!=='https:'||!url.hostname.endsWith('.workers.dev')||url.username||url.password||url.port||!['','/'].includes(url.pathname)||url.search||url.hash)throw new Error('Pega la dirección HTTPS de tu Worker de Cloudflare, terminada en .workers.dev, sin rutas extra.');return url.origin;}
 export function buildPushJobs(clients,now=Date.now()){
@@ -20,6 +20,7 @@ async function api(url,path,token,method='GET',body){
  try{const response=await fetch(url+path,{method,keepalive:method==='PUT',mode:'cors',credentials:'omit',cache:'no-store',signal:controller.signal,headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});const data=await response.json().catch(()=>null);if(!response.ok)throw Object.assign(new Error(data?.error||'No se pudo contactar con el servicio de avisos.'),{status:response.status});return data;}
  catch(err){if(err.name==='AbortError')throw new Error('El servicio tardó demasiado. No se confirmó la actualización de los avisos.');if(err instanceof TypeError)throw new Error('No se pudo conectar. Los cambios de los avisos siguen pendientes de enviar.');throw err;}finally{clearTimeout(timeout);}
 }
+function testStatus(text){const el=$('#push-test-state');if(el){el.hidden=false;el.textContent=text;}}
 function setStatus(text){const el=$('#push-state');if(el)el.textContent=text;const hint=$('#push-sync-state');if(hint){hint.hidden=!saved;hint.textContent=text;}}
 async function registration(){if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window))throw new Error('Este navegador no ofrece notificaciones push. En iPhone instala la PWA; en HONOR prueba Chrome actualizado.');return navigator.serviceWorker.ready;}
 function decodeKey(value){return Uint8Array.from(atob(value.replaceAll('-','+').replaceAll('_','/')),c=>c.charCodeAt(0));}
@@ -63,7 +64,25 @@ export function openPushSettings(){$('#push-code').value='';refresh();$('#push-d
 export function initPush(getClients,toast){
  readClients=getClients;notify=toast;saved=load();
  $('#push-enable').onclick=activate;$('#push-disable').onclick=deactivate;$('#push-sync').onclick=()=>{dirty=true;syncPush();};
- $('#push-test').onclick=async()=>{const button=$('#push-test');button.disabled=true;try{if(!saved||saved.disabled)return;await api(saved.url,'/devices/'+saved.deviceId+'/test',saved.deviceToken,'POST');setStatus('El proveedor aceptó la prueba. Comprueba que aparezca en el teléfono.');}catch(err){setStatus(err.message);}finally{button.disabled=false;}};
+ $('#push-test').onclick=async()=>{
+  const button=$('#push-test');if(button.disabled)return;button.disabled=true;button.textContent='Enviando prueba…';testReceived=false;testStatus('Enviando la prueba a Cloudflare… Puede tardar hasta 15 segundos.');
+  try{if(!saved||saved.disabled)throw new Error('Primero activa las notificaciones en este dispositivo.');await api(saved.url,'/devices/'+saved.deviceId+'/test',saved.deviceToken,'POST');if(!testReceived)testStatus('Cloudflare y el proveedor aceptaron la prueba. Baja la cortina de notificaciones del teléfono. Si no aparece, pulsa Probar aviso local.');}
+  catch(err){testStatus('No se envió la prueba: '+err.message);}
+  finally{button.disabled=false;button.textContent='Enviar prueba desde Cloudflare';}
+ };
+ $('#push-local-test').onclick=async()=>{
+  const button=$('#push-local-test');if(button.disabled)return;button.disabled=true;testStatus('Probando si este navegador puede mostrar avisos en el dispositivo…');
+  try{
+   if(!('Notification' in window))throw new Error('Este navegador no ofrece notificaciones. Prueba en Chrome del HONOR.');
+   if(Notification.permission!=='granted')throw new Error('El permiso está en «'+Notification.permission+'». Activa los avisos para Carterita en el navegador.');
+   const reg=await registration();await reg.showNotification('Carterita · prueba local',{body:'Esta prueba viene del teléfono, sin pasar por Cloudflare.',icon:new URL('./icon-192.png',location.href).href,tag:'carterita-local-test',data:{},renotify:false});
+   testStatus('El sistema aceptó el aviso local. Revisa la cortina de notificaciones. Si no aparece, comprueba los permisos de Chrome/Carterita en Ajustes del teléfono y No molestar.');
+  }catch(err){testStatus('La prueba local falló: '+err.message);}finally{button.disabled=false;}
+ };
+ navigator.serviceWorker?.addEventListener('message',event=>{
+  if(event.data?.type==='CARTERITA_PUSH_SHOWN'&&event.data.test===true){testReceived=true;testStatus('¡Carterita recibió la prueba de Cloudflare y el sistema aceptó mostrarla! Revisa la cortina de notificaciones. Si está oculta, revisa Ajustes del teléfono → Notificaciones → Chrome/Carterita y No molestar.');}
+  if(event.data?.type==='CARTERITA_PUSH_SHOW_FAILED')testStatus('La push llegó, pero el dispositivo no permitió mostrarla. Revisa los permisos de notificación y pulsa Probar aviso local.');
+ });
  $('#push-dialog').addEventListener('close',()=>{$('#push-code').value='';});
  window.addEventListener('online',()=>{dirty=true;syncPush();});document.addEventListener('visibilitychange',()=>{if(!document.hidden)dirty=true;syncPush();});window.addEventListener('pagehide',()=>syncPush());
  window.addEventListener('storage',event=>{if(event.key===KEY)saved=load();});

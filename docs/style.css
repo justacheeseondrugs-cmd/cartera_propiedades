@@ -17,3 +17,5 @@
 .package-download-list{display:flex;flex-direction:column;gap:10px;margin:12px 0}.package-download-list a{text-decoration:none;text-align:center;padding:12px;border-radius:12px}
 
 .backup-warning{padding:14px 18px;border:1px solid #c79736;background:#fff5dc;color:#5d410a;border-radius:12px;margin:14px 0}.device-lock-screen{position:fixed;inset:0;z-index:2147483647;background:#f3f5f2;display:grid;place-items:center;padding:24px}.device-lock-screen[hidden]{display:none}.device-lock-screen>div{width:min(100%,480px)}.device-locked .shell,.device-locked body>dialog,.device-locked #toast{visibility:hidden!important}.device-locked .device-lock-screen{visibility:visible!important}#ai-send-preview{font-size:14px}#privacy-dialog h3{margin-top:24px}
+
+.push-test-state{padding:14px;border:1px solid #92b4b0;background:#edf6f4;border-radius:10px;overflow-wrap:anywhere}

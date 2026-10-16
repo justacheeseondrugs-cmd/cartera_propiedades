@@ -1,4 +1,4 @@
-const CACHE='cartera-shell-v16';
+const CACHE='cartera-shell-v17';
 const ASSETS=['./','./index.html','./style.css','./app.js','./push.js','./bootstrap.js','./privacy.js','./device-lock.js','./pwa.js','./core.js','./ai.js','./attachments.js','./icon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
 const SCOPE=new URL(self.registration.scope);
 self.addEventListener('install',event=>{
@@ -29,12 +29,14 @@ self.addEventListener('fetch',event=>{
 self.addEventListener('push',event=>{
  let payload={};try{payload=event.data?.json()||{};}catch{}
  const id=typeof payload.clientId==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(payload.clientId)?payload.clientId:'';
- event.waitUntil(self.registration.showNotification('Carterita',{
+ event.waitUntil((async()=>{try{await self.registration.showNotification('Carterita',{
   body:payload.test===true?'Prueba de avisos: Carterita ya puede notificar en este dispositivo.':'Tienes un seguimiento pendiente en Carterita.',
   icon:new URL('./icon-192.png',SCOPE).href,badge:new URL('./icon-192.png',SCOPE).href,
   tag:payload.test===true?'carterita-test':'carterita-followup-'+id,
   data:{clientId:id},renotify:false
- }));
+ });
+ const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});for(const client of windows)if(new URL(client.url).origin===SCOPE.origin&&new URL(client.url).pathname.startsWith(SCOPE.pathname))client.postMessage({type:'CARTERITA_PUSH_SHOWN',test:payload.test===true});
+ }catch(err){const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});for(const client of windows)if(new URL(client.url).origin===SCOPE.origin&&new URL(client.url).pathname.startsWith(SCOPE.pathname))client.postMessage({type:'CARTERITA_PUSH_SHOW_FAILED'});throw err;}})());
 });
 self.addEventListener('notificationclick',event=>{
  event.notification.close();const id=event.notification.data?.clientId;

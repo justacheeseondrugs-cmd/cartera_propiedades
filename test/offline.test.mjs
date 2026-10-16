@@ -23,7 +23,7 @@ test('push notifications are generic and clicks only focus or open this app',asy
  const events={},notifications=[],messages=[],opened=[];let focused=0;const scope='https://example.org/cartera_propiedades/';
  const self={registration:{scope,showNotification:async(title,options)=>notifications.push({title,options})},addEventListener:(name,fn)=>events[name]=fn,clients:{matchAll:async()=>[{url:scope,focus:async()=>{focused++;},postMessage:message=>messages.push(message)}],openWindow:async url=>opened.push(url)}};
  vm.runInNewContext(await readFile(new URL('sw.js',root),'utf8'),{self,URL});
- let promise;events.push({data:{json:()=>({clientId:'case-123',name:'Secret Name',body:'PRIVATE',url:'https://evil.test'})},waitUntil:p=>promise=p});await promise;assert.equal(notifications[0].title,'Carterita');assert.doesNotMatch(JSON.stringify(notifications),/Secret Name|PRIVATE|evil/);
- events.notificationclick({notification:{data:{clientId:'case-123'},close(){}},waitUntil:p=>promise=p});await promise;assert.equal(focused,1);assert.equal(messages[0].clientId,'case-123');assert.equal(opened.length,0);
+ let promise;events.push({data:{json:()=>({clientId:'case-123',name:'Secret Name',body:'PRIVATE',url:'https://evil.test'})},waitUntil:p=>promise=p});await promise;assert.equal(notifications[0].title,'Carterita');assert.equal(messages[0].type,'CARTERITA_PUSH_SHOWN');assert.doesNotMatch(JSON.stringify(notifications),/Secret Name|PRIVATE|evil/);
+ events.notificationclick({notification:{data:{clientId:'case-123'},close(){}},waitUntil:p=>promise=p});await promise;assert.equal(focused,1);assert.equal(messages.find(m=>m.type==='OPEN_FOLLOWUP').clientId,'case-123');assert.equal(opened.length,0);
  self.clients.matchAll=async()=>[];events.notificationclick({notification:{data:{clientId:'https://evil.test'},close(){}},waitUntil:p=>promise=p});await promise;assert.equal(opened[0],scope);
 });
