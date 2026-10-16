@@ -212,3 +212,8 @@ Se mantienen dos entradas: dictado del teléfono y grabación MediaRecorder envi
 «Iniciar conversación» pide autorización para los envíos durante esa sesión. Detecta pausas, reconoce «respóndeme ahora»/«fin del mensaje», pausa el micrófono durante la respuesta y vuelve a escuchar al terminar. Las respuestas se leen por defecto, salvo preferencia previa de solo texto. «Solo texto» desactiva la lectura; «Terminar conversación», cerrar el asistente u ocultar la PWA detienen la sesión. No es una llamada en segundo plano. Las acciones sobre clientes siguen pendientes hasta que se revisen y confirmen.
 
 Se conserva el formato de respaldos y los datos locales existentes. El código de voz y las preferencias del servicio se guardan por dispositivo, fuera de los respaldos. El Worker guarda solo el contador de intentos de voz separado del servicio de avisos, nunca audios o transcripciones. Las pruebas de ciclo de voz, grabación y proveedor se simularon; la compatibilidad real de micrófono, pausas y lectura debe probarse en HONOR/iPhone después de configurar los secretos.
+
+
+### Corrección 0.18.1: Enviar mientras se lee una respuesta
+
+El campo y el botón de envío vuelven a estar disponibles cuando llega el texto, sin esperar el final de la lectura. Enviar otro mensaje interrumpe la voz anterior; las respuestas y sus esperas se identifican para que una lectura cancelada no desbloquee ni cancele una petición posterior. El micrófono continúa pausado mientras habla. Si el motor de voz omite `onend`, se comprueba si dejó de hablar antes de retomar la escucha; si no llega a comenzar, se detiene con un mensaje en lugar de bloquear indefinidamente el chat. Elegir Solo texto durante una respuesta permite continuar el modo conversación.

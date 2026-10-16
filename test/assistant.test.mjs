@@ -71,3 +71,17 @@ test('spoken punctuation handles Spanish questions, separators and line breaks w
  assert.equal(normalizeSpokenPunctuation(unchanged),unchanged);
  assert.equal(normalizeSpokenPunctuation('¿Cómo está?'),'¿Cómo está?');
 });
+
+import {setupAssistantVoice} from '../docs/assistant.js';
+function voiceFixture(missingEnd){
+ const listeners=new Map(),element=()=>({textContent:'',checked:true,addEventListener:(event,fn)=>listeners.set(event,fn)});
+ const engine={speaking:false,pending:false,getVoices:()=>[],addEventListener(){},cancel(){this.speaking=false;},speak(utterance){this.speaking=true;utterance.onstart?.();if(missingEnd)setTimeout(()=>{this.speaking=false;},10);}};
+ const doc={hidden:false,documentElement:{classList:{contains:()=>false}},querySelector:()=>null,addEventListener(){},defaultView:{speechSynthesis:engine,SpeechSynthesisUtterance:class {constructor(text){this.text=text;}},localStorage:{getItem:()=>null,setItem(){}}}};
+ const input={ownerDocument:doc,addEventListener(){},value:''};const voice=setupAssistantVoice({input,button:element(),status:element(),readButton:element(),readEnabled:element(),response:{textContent:'Una respuesta breve.'},dialog:element()});return {voice,engine};
+}
+test('speech wait recovers when the engine finishes but omits onend',async()=>{
+ const {voice}=voiceFixture(true);let timer;try{const result=await Promise.race([voice.speakIfEnabled(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('stuck waiting for onend')),1800);})]);assert.equal(result,true);}finally{clearTimeout(timer);voice.stop();}
+});
+test('interrupting speech immediately releases the pending waiter',async()=>{
+ const {voice}=voiceFixture(false);const pending=voice.speakIfEnabled();voice.stop();assert.equal(await pending,false);
+});
