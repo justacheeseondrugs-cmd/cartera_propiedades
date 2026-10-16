@@ -52,12 +52,12 @@ Cloudflare Workers solo admite los modos de redirección `follow` y `manual`. El
 La voz usa el mismo Worker con una ruta independiente `/transcribe`. Los avisos existentes conservan `REMINDERS`, la clase `ReminderService` y la migración v1. La migración v2 añade `VOICE_USAGE`/`VoiceUsage`, otro Durable Object SQLite que guarda solo fecha y número de intentos. No modifica suscripciones, fichas, respaldos ni avisos. No requiere KV: el contador es atómico para evitar excederlo por peticiones simultáneas.
 
 1. Espera que **Workers Builds** termine correctamente al actualizar el repositorio.
-2. En Carterita abre **Asistente → Configurar voz con IA → Generar código nuevo → Copiar código**. Conserva esta pantalla mientras configuras Cloudflare. No es la clave de OpenAI.
-3. En Cloudflare entra a **Workers & Pages → carterita-avisos → Settings → Variables and Secrets**. Añade dos valores de tipo **Secret**:
-   - `OPENAI_API_KEY`: una clave de API de OpenAI con saldo y permiso para transcripción. No es la suscripción de ChatGPT. Puede usarse una clave existente si tiene los permisos necesarios; nunca se pega en GitHub ni en este chat.
+2. En Carterita abre **Asistente → Configurar voz con IA → Generar código nuevo → Copiar código → Guardar servicio de voz**. Guárdalo antes de cambiar de app, porque el bloqueo puede cerrar los formularios y limpiar el campo. No es la clave de OpenAI.
+3. En Cloudflare entra a **Workers & Pages → carterita-avisos → Settings → Variables and Secrets**. Añade dos valores de tipo **Secret**, comenzando por el código que ya tienes copiado:
    - `TRANSCRIBE_TOKEN`: el mismo código aleatorio que generó Carterita (mínimo 32 caracteres).
+   - `OPENAI_API_KEY`: una clave de API de OpenAI con saldo y permiso para transcripción. No es la suscripción de ChatGPT. Puede usarse una clave existente si tiene los permisos necesarios; nunca se pega en GitHub ni en este chat.
 4. Guarda/despliega la configuración de Cloudflare si lo solicita. No borres ni cambies `PAIRING_CODE` ni los bindings de avisos.
-5. Regresa a Carterita. La dirección predefinida es `https://carterita-avisos.justacheeseondrugs.workers.dev`. Si desplegaste otro Worker, cámbiala. Guarda el código de conexión en esa pantalla. No pegues aquí la clave de OpenAI.
+5. Regresa a Carterita. La dirección predefinida es `https://carterita-avisos.justacheeseondrugs.workers.dev`. Si desplegaste otro Worker, cámbiala. El código ya quedó guardado en el paso 2. Si necesitas volver a copiarlo, abre esa configuración. No pegues aquí la clave de OpenAI.
 6. Compartir nombres es opcional y viene desactivado. Si lo activas, se enviarán hasta 100 nombres, nunca sus teléfonos, correos ni documentos. Antes de transcribir manualmente se muestra la lista; en modo conversación se revisa al autorizar la sesión. La lista se fija durante esa sesión. Las coincidencias aproximadas son sugerencias para aceptar, nunca sustituciones silenciosas.
 
 Variables no secretas ya incluidas en `wrangler.jsonc`:
