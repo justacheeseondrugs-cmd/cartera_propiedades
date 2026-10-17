@@ -21,7 +21,9 @@ export class CalendarAuth {
  async tokens(body){
   if(!this.env.GOOGLE_CLIENT_ID||!this.env.GOOGLE_CLIENT_SECRET)fail('Falta configurar GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en Cloudflare.',503);
   const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({...body,client_id:this.env.GOOGLE_CLIENT_ID,client_secret:this.env.GOOGLE_CLIENT_SECRET}),signal:AbortSignal.timeout(15000)});
-  const value=await r.json();if(!r.ok){if(value.error==='invalid_grant')fail('Google pide autorizar de nuevo. Toca «Conectar Google».',401);fail('Google no pudo autorizar la conexión. Revisa el cliente OAuth de Cloudflare.',502);}return value;
+  const value=await r.json();if(!r.ok){if(value.error==='invalid_grant')fail('Google pide autorizar de nuevo. Toca «Conectar Google».',401);
+   const messages={invalid_client:'Google no reconoce el ID y el secreto del cliente. En Cloudflare, revisa que GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET pertenezcan al mismo cliente web que usa Carterita. Guarda y despliega los cambios.',unauthorized_client:'Este cliente de Google no permite esta autorización. Revisa que sea de tipo Aplicación web y que siga activo.',redirect_uri_mismatch:'La dirección de autorización no coincide. En Cloudflare, APP_ORIGIN debe ser https://justacheeseondrugs-cmd.github.io, sin la ruta de Carterita ni una barra al final.',invalid_request:'Google recibió una autorización incompleta. Revisa el cliente web y APP_ORIGIN en Cloudflare y vuelve a conectar desde Carterita.'};
+   fail(messages[value.error]||'Google no pudo autorizar la conexión. Revisa el cliente OAuth de Cloudflare.',502);}return value;
  }
  async handle(request){
   const path=new URL(request.url).pathname;

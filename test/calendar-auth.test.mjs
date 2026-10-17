@@ -22,3 +22,11 @@ test('calendar access requires an authenticated existing device, and missing sec
  f.env.CALENDAR_ENCRYPTION_KEY='';const response=await f.request('session');assert.equal(response.status,503);assert.match((await response.json()).error,/CALENDAR_ENCRYPTION_KEY/);
 });
 test('OAuth callback rejects missing custom CSRF header without exchanging code',async()=>{const f=fixture();assert.equal((await f.request('authorize','POST',{code:'code'},{'X-Requested-With':''})).status,403);});
+
+test('Google OAuth errors explain the configuration to check without exposing provider details or secrets',async()=>{
+ const original=globalThis.fetch;
+ try{for(const [code,expected] of [['invalid_client',/mismo cliente web/],['unauthorized_client',/Aplicación web/],['redirect_uri_mismatch',/APP_ORIGIN/],['invalid_request',/incompleta/]]){
+ const f=fixture();globalThis.fetch=async()=>Response.json({error:code,error_description:'SENSITIVE PROVIDER DETAIL'},{status:400});
+ const response=await f.request('authorize','POST',{code:'one-use-code'});assert.equal(response.status,502);const result=await response.json();assert.match(result.error,expected);assert.doesNotMatch(JSON.stringify(result),/SENSITIVE|private-client-secret|one-use-code/);
+ }}finally{globalThis.fetch=original;}
+});
