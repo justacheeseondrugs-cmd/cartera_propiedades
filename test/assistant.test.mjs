@@ -85,3 +85,9 @@ test('speech wait recovers when the engine finishes but omits onend',async()=>{
 test('interrupting speech immediately releases the pending waiter',async()=>{
  const {voice}=voiceFixture(false);const pending=voice.speakIfEnabled();voice.stop();assert.equal(await pending,false);
 });
+
+test('assistant receives the complete compact writing profile, examples and confirmed relationship',()=>{
+ const profile={treatment:'usted',tone:'cercano y natural',preferences:'x'.repeat(900)+' REGLA FINAL NO OMITIR',examples:['Ejemplo de estilo sin disponibilidad confirmada.'],exampleStatus:'iniciales por revisar'};
+ const c={name:'Cliente A',businessArea:'Corretaje',intent:'Comprar',area:'',property:'',budget:'',status:'Nuevo',nextAction:'',followup:'',followupTime:'',documents:[],relationship:'Cliente habitual',lastMessage:'¿Podemos revisar las condiciones?'};
+ const prompt=assistantPrompt('Prepare un borrador',c,profile);assert.match(prompt,/REGLA FINAL NO OMITIR/);assert.match(prompt,/Ejemplo de estilo sin disponibilidad confirmada/);assert.match(prompt,/Cliente habitual/);assert.match(prompt,/Podemos revisar las condiciones/);assert.match(prompt,/no uses sus hechos/);
+});
